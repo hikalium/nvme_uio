@@ -1,4 +1,4 @@
-OBJS= main.o keyboard.o xhci.o usb.o hub.o
+OBJS= main.o keyboard.o nvme.o usb.o hub.o
 DEPS= $(filter %.d, $(subst .o,.d, $(OBJS)))
 
 CXXFLAGS += -g -std=c++11 -MMD -MP
@@ -12,9 +12,9 @@ default: a.out
 # need to be edited by yourself
 load:
 	sudo modprobe uio_pci_generic
-	sudo sh -c "echo 'xxxx xxxx' > /sys/bus/pci/drivers/uio_pci_generic/new_id"
-	sudo sh -c "echo -n 0000:xx:xx.0 > /sys/bus/pci/drivers/xhci_hcd/unbind"
-	sudo sh -c "echo -n 0000:xx:xx.0 > /sys/bus/pci/drivers/uio_pci_generic/bind"
+	sudo sh -c "echo '8086 5845' > /sys/bus/pci/drivers/uio_pci_generic/new_id"
+	sudo sh -c "echo -n 0000:00:05.0 > /sys/bus/pci/drivers/nvme/unbind"
+	sudo sh -c "echo -n 0000:00:05.0 > /sys/bus/pci/drivers/uio_pci_generic/bind"
 
 load_vagrant:
 	sudo modprobe uio_pci_generic
