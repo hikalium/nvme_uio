@@ -1,7 +1,7 @@
 OBJS= main.o keyboard.o nvme.o usb.o hub.o
 DEPS= $(filter %.d, $(subst .o,.d, $(OBJS)))
 
-CXXFLAGS += -g -std=c++11 -MMD -MP
+CXXFLAGS += -g -std=c++11 -MMD -MP -Wall -Wpedantic -pthread
 
 .PHONY: load_uio run
 
@@ -9,43 +9,31 @@ default: a.out
 
 -include $(DEPS)
 
-# need to be edited by yourself
+TARGET_PCI_BUS_ID=$(shell lspci | grep Non-Volatile | cut -f 1 -d ' ')
+TARGET_PCI_VID_DID=$(shell lspci -n -s $(TARGET_PCI_BUS_ID) | cut -f 3 -d ' ')
+TARGET_PCI_VID=$(shell echo $(TARGET_PCI_VID_DID) | cut -f 1 -d ':')
+TARGET_PCI_DID=$(shell echo $(TARGET_PCI_VID_DID) | cut -f 2 -d ':')
+TARGET_KERNEL_DRIVER=$(shell lspci -k -s $(TARGET_PCI_BUS_ID) | grep "Kernel modules:" | cut -f 2 -d ":" | tr -d " ")
+
+check:
+	@lspci -vv -n -k -s $(TARGET_PCI_BUS_ID)
+	@echo "   bus: $(TARGET_PCI_BUS_ID)"
+	@echo "vendor: $(TARGET_PCI_VID)"
+	@echo "device: $(TARGET_PCI_DID)"
+	@echo "driver: $(TARGET_KERNEL_DRIVER)"
+
 load:
 	sudo modprobe uio_pci_generic
-	sudo sh -c "echo '8086 5845' > /sys/bus/pci/drivers/uio_pci_generic/new_id"
-	sudo sh -c "echo -n 0000:00:05.0 > /sys/bus/pci/drivers/nvme/unbind"
-	sudo sh -c "echo -n 0000:00:05.0 > /sys/bus/pci/drivers/uio_pci_generic/bind"
-
-load_vagrant:
-	sudo modprobe uio_pci_generic
-	sudo sh -c "echo '8086 1e31' > /sys/bus/pci/drivers/uio_pci_generic/new_id"
-	sudo sh -c "echo -n 0000:00:0c.0 > /sys/bus/pci/drivers/xhci_hcd/unbind"
-	sudo sh -c "echo -n 0000:00:0c.0 > /sys/bus/pci/drivers/uio_pci_generic/bind"
-
-load_nuc:
-	sudo modprobe uio_pci_generic
-	sudo sh -c "echo '8086 9d2f' > /sys/bus/pci/drivers/uio_pci_generic/new_id"
-	sudo sh -c "echo -n 0000:00:14.0 > /sys/bus/pci/drivers/xhci_hcd/unbind"
-	sudo sh -c "echo -n 0000:00:14.0 > /sys/bus/pci/drivers/uio_pci_generic/bind"
-
-load_qemu:
-	sudo modprobe uio_pci_generic
-	sudo sh -c "echo '1033 0194' > /sys/bus/pci/drivers/uio_pci_generic/new_id"
-	sudo sh -c "echo -n 0000:01:03.0 > /sys/bus/pci/drivers/xhci_hcd/unbind"
-	sudo sh -c "echo -n 0000:01:03.0 > /sys/bus/pci/drivers/uio_pci_generic/bind"
-
-load_skylake:
-	sudo modprobe uio_pci_generic
-	sudo sh -c "echo '8086 a12f' > /sys/bus/pci/drivers/uio_pci_generic/new_id"
-	sudo sh -c "echo -n 0000:00:14.0 > /sys/bus/pci/drivers/xhci_hcd/unbind"
-	sudo sh -c "echo -n 0000:00:14.0 > /sys/bus/pci/drivers/uio_pci_generic/bind"
+	sudo sh -c "echo '$(TARGET_PCI_VID) $(TARGET_PCI_DID)' > /sys/bus/pci/drivers/uio_pci_generic/new_id"
+	sudo sh -c "echo -n 0000:$(TARGET_PCI_BUS_ID) > /sys/bus/pci/drivers/$(TARGET_KERNEL_DRIVER)/unbind"
+	sudo sh -c "echo -n 0000:$(TARGET_PCI_BUS_ID) > /sys/bus/pci/drivers/uio_pci_generic/bind"
 
 run: a.out
 	sudo sh -c "echo 120 > /proc/sys/vm/nr_hugepages"
 	sudo ./a.out
 
 a.out: $(OBJS)
-	g++ -g -std=c++11 -pthread $^
+	g++ $(CXXFLAGS) $^
 
 clean:
 	-rm a.out $(DEPS) $(OBJS)
