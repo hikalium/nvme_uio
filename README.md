@@ -1,5 +1,5 @@
 # nvme_uio
-Simple implementation of NVMe (USB3.0 Host Controller) Linux usermode driver
+Simple implementation of NVMe Linux usermode driver
 
 based on [liva/xhci_uio](https://github.com/liva/xhci_uio).
 
