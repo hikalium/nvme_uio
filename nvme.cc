@@ -1,6 +1,4 @@
 #include "nvme.h"
-#include "hub.h"
-#include "keyboard.h"
 
 void DevNvme::Init() {
   _pci.Init();

@@ -5,10 +5,9 @@
 #include "usb.h"
 
 class Hub : public DevUsb {
-public:
+ public:
   Hub() = delete;
-  Hub(DevUsbController *hc, int addr) : DevUsb(hc, addr) {
-  }
+  Hub(DevUsbController *hc, int addr) : DevUsb(hc, addr) {}
   static Hub *Init(DevUsbController *hc, int addr);
   UsbCtrl::PortSpeed GetPortSpeed(int port_id);
   void Reset(int port_id);
@@ -16,10 +15,11 @@ public:
     printf("hub: info: detached\n");
     assert(false);
   }
-private:
+
+ private:
   // Table 11-8. Hub Descriptor
   class HubDescriptor {
-  public:
+   public:
     uint8_t length;
     uint8_t type;
     uint8_t num_of_ports;
@@ -70,7 +70,7 @@ private:
 
   int _num_of_ports = 0;
   HubDescriptor *_desc;
-  
+
   void InitSub();
   uint16_t GetPortStatus(int port_id);
   void SetPortFeature(int port_id, HubClassFeatureSelector selector);

@@ -7,11 +7,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+//
 #include "generic.h"
-#include "hub.h"
 #include "mem.h"
 #include "pci.h"
-#include "usb.h"
 
 class DevNvme {
  public:

@@ -1,7 +1,7 @@
-OBJS= main.o keyboard.o nvme.o usb.o hub.o
+OBJS= main.o nvme.o
 DEPS= $(filter %.d, $(subst .o,.d, $(OBJS)))
 
-CXXFLAGS += -g -std=c++11 -MMD -MP -Wall -Wpedantic -pthread
+CXXFLAGS += -g -std=c++14 -MMD -MP -Wall -Wpedantic -pthread
 
 .PHONY: load_uio run
 
