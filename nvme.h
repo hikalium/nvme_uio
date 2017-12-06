@@ -14,8 +14,64 @@
 
 class DevNvme {
  public:
+  void Init();
+  void Run() {
+    pthread_t tid;
+    if (pthread_create(&tid, NULL, Main, this) != 0) {
+      perror("pthread_create:");
+      exit(1);
+    }
+    while (true) {
+      _pci.WaitInterrupt();
+      puts("Interrupted!");
+      /*
+    pthread_mutex_lock(&_mp);
+    _interrupter.Handle();
+    pthread_mutex_unlock(&_mp);
+    */
+    }
+  }
+  static void *Main(void *);
+  void IssueAdminIdentify(const Memory *prp1, uint32_t nsid, uint16_t cntid,
+                          uint8_t cns);
+
+ private:
+  DevPci _pci;
+
+  static const int kCtrlReg64OffsetCAP = 0x00 / sizeof(uint64_t);
+  static const int kCtrlReg32OffsetINTMS = 0x0C / sizeof(uint32_t);
+  static const int kCtrlReg32OffsetINTMC = 0x10 / sizeof(uint32_t);
+  static const int kCtrlReg32OffsetCC = 0x14 / sizeof(uint32_t);
+  static const int kCtrlReg32OffsetCSTS = 0x1C / sizeof(uint32_t);
+  static const int kCtrlReg32OffsetAQA = 0x24 / sizeof(uint32_t);
+  static const int kCtrlReg64OffsetASQ = 0x28 / sizeof(uint64_t);
+  static const int kCtrlReg64OffsetACQ = 0x30 / sizeof(uint64_t);
+  static const int kCtrlReg32OffsetDoorbellBase = 0x1000 / sizeof(uint32_t);
+
+  static const int kASQSize = 8;
+  static const int kACQSize = 8;
+
+  static const int kCC_AMS_RoundRobin = 0b000;
+  static const int kCC_CSS_NVMeCommandSet = 0b000;
+  static const int kCC_SHN_NoNotification = 0b00;
+
+  static const __useconds_t kCtrlTimeout = 500 * 1000;
+
+  enum class AdminCommandSet : uint16_t {
+    kIdentify = 0x06,
+    kAbort = 0x08,
+  };
+
+  static const int kFUSE_Normal = 0b00;
+  static const int kPSDT_UsePRP = 0b00;
   struct CommandSet {
-    uint32_t CDW0;
+    struct {
+      unsigned OPC : 8;
+      unsigned FUSE : 2;
+      unsigned Reserved0 : 4;
+      unsigned PSDT : 2;
+      unsigned CID : 16;
+    } CDW0;
     uint32_t NSID;
     uint64_t Reserved0;
     uint64_t MPTR;
@@ -33,8 +89,15 @@ class DevNvme {
     uint32_t DW1;
     uint16_t SQHD;
     uint16_t SQID;
-    uint16_t SF;  // includes Phase Tag
-    uint16_t CID;
+    struct {
+      unsigned CID : 16;
+      unsigned P : 1;
+      unsigned SC : 8;
+      unsigned SCT : 3;
+      unsigned Reserved0 : 2;
+      unsigned M : 1;
+      unsigned DNR : 1;
+    } SF;  // includes Phase Tag
   } __attribute__((packed));
 
   union ControllerCapabilities {
@@ -79,53 +142,75 @@ class DevNvme {
       unsigned SHST : 2;
       unsigned NSSRO : 1;
       unsigned PP : 1;
-      unsigned Reserved : 28;
+      unsigned Reserved : 26;
     } bits;
   };
 
-  void Init();
-  /*
-  void Run() {
-    pthread_t tid;
-    if (pthread_create(&tid, NULL, AttachAll, this) != 0) {
-      perror("pthread_create:");
-      exit(1);
-    }
-    while(true) {
-      _pci.WaitInterrupt();
-      pthread_mutex_lock(&_mp);
-      _interrupter.Handle();
-      pthread_mutex_unlock(&_mp);
-    }
-  }
-  */
- private:
-  DevPci _pci;
-
-  static const int kCtrlReg64OffsetCAP = 0x00 / sizeof(uint64_t);
-  static const int kCtrlReg32OffsetCC = 0x14 / sizeof(uint32_t);
-  static const int kCtrlReg32OffsetCSTS = 0x1C / sizeof(uint32_t);
-  static const int kCtrlReg32OffsetAQA = 0x24 / sizeof(uint32_t);
-  static const int kCtrlReg64OffsetASQ = 0x28 / sizeof(uint64_t);
-  static const int kCtrlReg64OffsetACQ = 0x30 / sizeof(uint64_t);
-
-  static const int kASQSize = 8;
-  static const int kACQSize = 8;
-
-  static const int kCC_AMS_RoundRobin = 0b000;
-  static const int kCC_CSS_NVMeCommandSet = 0b000;
+  // from ControllerCapabilities
+  __useconds_t _ctrl_timeout_worst = 0;  // set in Init()
+  int _doorbell_stride = 0;              // CAP.DSTRD
 
   volatile uint8_t *_ctrl_reg_8_base = nullptr;
   uint8_t _ctrl_reg_8_size = 0;
   volatile uint32_t *_ctrl_reg_32_base = nullptr;
   volatile uint64_t *_ctrl_reg_64_base = nullptr;
 
-  __useconds_t _ctrl_timeout_worst = 0;  // set in Init()
-  static const __useconds_t _ctrl_timeout = 500 * 1000;
-
   Memory *_mem_for_asq;
+  volatile CommandSet *_asq;
   Memory *_mem_for_acq;
+  volatile CompletionQueueEntry *_acq;
+
+  static int16_t _next_cid;  // being incremented by each command construction
 
   void MapControlRegisters();
   void InitAdminQueues();
+
+  uint64_t GetSQyTDBL(int y) {
+    assert(_ctrl_reg_32_base != nullptr);
+    return _ctrl_reg_32_base[kCtrlReg32OffsetDoorbellBase +
+                             (2 * y) * (4 << _doorbell_stride)];
+  }
+  void SetSQyTDBL(int y, uint64_t tail) {
+    assert(_ctrl_reg_32_base != nullptr);
+    _ctrl_reg_32_base[kCtrlReg32OffsetDoorbellBase +
+                      (2 * y) * (4 << _doorbell_stride)] = tail;
+  }
+  uint64_t GetCQyHDBL(int y) {
+    assert(_ctrl_reg_32_base != nullptr);
+    return _ctrl_reg_32_base[kCtrlReg32OffsetDoorbellBase +
+                             (2 * y + 1) * (4 << _doorbell_stride)];
+  }
+  void SetCQyHDBL(int y, uint64_t head) {
+    assert(_ctrl_reg_32_base != nullptr);
+    _ctrl_reg_32_base[kCtrlReg32OffsetDoorbellBase +
+                      (2 * y + 1) * (4 << _doorbell_stride)] = head;
+  }
+  uint16_t ConstructAdminCommand(int slot, AdminCommandSet op) {
+    // returns CID
+    // Set CDW0 for op.
+    uint16_t cid = _next_cid++;
+    assert(0 <= slot && slot < kASQSize);
+    switch (op) {
+      case AdminCommandSet::kIdentify:
+        _asq[slot].CDW0.OPC = static_cast<int>(op);
+        _asq[slot].CDW0.FUSE = kFUSE_Normal;
+        _asq[slot].CDW0.PSDT = kPSDT_UsePRP;
+        _asq[slot].CDW0.CID = cid;
+        break;
+      case AdminCommandSet::kAbort:
+        _asq[slot].CDW0.OPC = static_cast<int>(op);
+        _asq[slot].CDW0.CID = cid;
+        break;
+      default:
+        printf("Tried to construct unknown command %d\n", static_cast<int>(op));
+        exit(EXIT_FAILURE);
+    }
+    return cid;
+  };
+  void PrintControllerConfiguration(ControllerConfiguration);
+  void PrintControllerStatus(ControllerStatus);
+  void PrintControllerCapabilities(ControllerCapabilities);
+  void PrintCompletionQueueEntry(volatile CompletionQueueEntry *);
+  void PrintAdminQueuesSettings();
+  void PrintInterruptMask();
 };

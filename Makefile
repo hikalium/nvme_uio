@@ -28,6 +28,12 @@ load:
 	sudo sh -c "echo -n 0000:$(TARGET_PCI_BUS_ID) > /sys/bus/pci/drivers/$(TARGET_KERNEL_DRIVER)/unbind"
 	sudo sh -c "echo -n 0000:$(TARGET_PCI_BUS_ID) > /sys/bus/pci/drivers/uio_pci_generic/bind"
 
+restore:
+	sudo modprobe nvme
+	sudo sh -c "echo '$(TARGET_PCI_VID) $(TARGET_PCI_DID)' > /sys/bus/pci/drivers/nvme/new_id"
+	sudo sh -c "echo -n 0000:$(TARGET_PCI_BUS_ID) > /sys/bus/pci/drivers/uio_pci_generic/unbind"
+	sudo sh -c "echo -n 0000:$(TARGET_PCI_BUS_ID) > /sys/bus/pci/drivers/nvme/bind"
+
 install_uio_module:
 	wget https://raw.githubusercontent.com/PFLab-OS/Raph_Kernel_devenv_box/master/uio.sh
 	@echo "Please waiti for a while..."

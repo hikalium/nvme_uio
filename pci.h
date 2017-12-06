@@ -2,9 +2,8 @@
 #include <stdio.h>
 
 class DevPci {
-public:
-  DevPci() {
-  }
+ public:
+  DevPci() {}
   void Init() {
     _uiofd = open("/dev/uio0", O_RDONLY);
     if (_uiofd < 0) {
@@ -35,17 +34,30 @@ public:
   void WritePciReg(uint16_t reg, uint32_t val) {
     pwrite(_configfd, &val, 4, reg);
   }
+  void AllowInterrupt() {
+    {
+      uint16_t command;
+      ReadPciReg(kCommandReg, command);
+      command &= ~kCommandRegInterruptDisableFlag;
+      WritePciReg(kCommandReg, command);
+    }
+    {
+      uint32_t info = 1; /* unmask */
+      size_t nb = write(_uiofd, &info, sizeof(info));
+      if (nb < sizeof(info)) {
+        perror("write");
+        exit(EXIT_FAILURE);
+      }
+    }
+  }
   void WaitInterrupt() {
-    uint16_t command;
-    ReadPciReg(kCommandReg, command);
-    command &= ~kCommandRegInterruptDisableFlag;
-    WritePciReg(kCommandReg, command);
-
-    int icount;
-    /* Wait for next interrupt. */
-    if (read(_uiofd, &icount, 4) != 4) {
-      perror("uio read:");
-      exit(1);
+    {
+      uint32_t icount;
+      /* Wait for next interrupt. */
+      if (read(_uiofd, &icount, sizeof(icount)) != sizeof(icount)) {
+        perror("uio read:");
+        exit(EXIT_FAILURE);
+      }
     }
   }
 
@@ -83,7 +95,8 @@ public:
   // see PCI Local Bus Specification 6.8.1.3
   static const uint16_t kMsiCapRegControlMsiEnableFlag = 1 << 0;
   static const uint16_t kMsiCapRegControlMultiMsgCapOffset = 1;
-  static const uint16_t kMsiCapRegControlMultiMsgCapMask = 7 << kMsiCapRegControlMultiMsgCapOffset;
+  static const uint16_t kMsiCapRegControlMultiMsgCapMask =
+      7 << kMsiCapRegControlMultiMsgCapOffset;
   static const uint16_t kMsiCapRegControlMultiMsgEnableOffset = 4;
   static const uint16_t kMsiCapRegControlAddr64Flag = 1 << 7;
 
@@ -107,7 +120,7 @@ public:
   static const uint32_t kRegBaseAddrMaskMemAddr = 0xFFFFFFF0;
   static const uint32_t kRegBaseAddrMaskIoAddr = 0xFFFFFFFC;
 
-private:
+ private:
   int _uiofd;
   int _configfd;
 };

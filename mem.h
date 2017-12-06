@@ -41,7 +41,7 @@ class Memory {
   T *GetVirtPtr() {
     return reinterpret_cast<T *>(_virt);
   }
-  phys_addr GetPhysPtr() { return _phys; }
+  phys_addr GetPhysPtr() const { return _phys; }
   size_t GetSize() { return _size; }
 
  private:
