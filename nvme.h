@@ -24,12 +24,12 @@ class DevNvme {
     while (true) {
       puts("Waiting for interrupt...");
       _pci.WaitInterrupt();
-      puts("Interrupted!");
-      /*
-    pthread_mutex_lock(&_mp);
-    _interrupter.Handle();
-    pthread_mutex_unlock(&_mp);
-    */
+	  pthread_mutex_lock(&_mp);
+	  {
+      	puts("Interrupted!");
+		InterruptHandler();
+	  }
+	  pthread_mutex_unlock(&_mp);
     }
   }
   static void *Main(void *);
@@ -37,6 +37,7 @@ class DevNvme {
                           uint8_t cns);
 
  private:
+  pthread_mutex_t _mp;
   DevPci _pci;
 
   static const int kCtrlReg64OffsetCAP = 0x00 / sizeof(uint64_t);
@@ -98,7 +99,7 @@ class DevNvme {
       unsigned Reserved0 : 2;
       unsigned M : 1;
       unsigned DNR : 1;
-    } SF;  // includes Phase Tag
+    } SF;
   } __attribute__((packed));
 
   union ControllerCapabilities {
@@ -160,31 +161,37 @@ class DevNvme {
   volatile CommandSet *_asq;
   Memory *_mem_for_acq;
   volatile CompletionQueueEntry *_acq;
+  int _expectedCompletionQueueEntryPhase = 1;
 
   static int16_t _next_cid;  // being incremented by each command construction
 
   void MapControlRegisters();
   void InitAdminQueues();
 
-  uint64_t GetSQyTDBL(int y) {
+  int GetDoorbellIndex(int y, int isCompletionQueue){
+  	return kCtrlReg32OffsetDoorbellBase + ((2 * y + isCompletionQueue) * (4 << _doorbell_stride) / sizeof(uint32_t));
+  }
+
+  uint32_t GetSQyTDBL(int y) {
     assert(_ctrl_reg_32_base != nullptr);
-    return _ctrl_reg_32_base[kCtrlReg32OffsetDoorbellBase +
-                             (2 * y) * (4 << _doorbell_stride)];
+    return _ctrl_reg_32_base[GetDoorbellIndex(y, 0)];
   }
   void SetSQyTDBL(int y, uint64_t tail) {
     assert(_ctrl_reg_32_base != nullptr);
-    _ctrl_reg_32_base[kCtrlReg32OffsetDoorbellBase +
-                      (2 * y) * (4 << _doorbell_stride)] = tail;
+    _ctrl_reg_32_base[GetDoorbellIndex(y, 0)] = tail;
   }
-  uint64_t GetCQyHDBL(int y) {
+  uint32_t GetCQyHDBL(int y) {
     assert(_ctrl_reg_32_base != nullptr);
-    return _ctrl_reg_32_base[kCtrlReg32OffsetDoorbellBase +
-                             (2 * y + 1) * (4 << _doorbell_stride)];
+    return _ctrl_reg_32_base[GetDoorbellIndex(y, 1)];
   }
   void SetCQyHDBL(int y, uint64_t head) {
     assert(_ctrl_reg_32_base != nullptr);
-    _ctrl_reg_32_base[kCtrlReg32OffsetDoorbellBase +
-                      (2 * y + 1) * (4 << _doorbell_stride)] = head;
+    _ctrl_reg_32_base[GetDoorbellIndex(y, 1)] = head;
+  }
+  void SetInterruptMaskForQueue(int y){
+  	uint32_t mask = _ctrl_reg_32_base[kCtrlReg32OffsetINTMS];
+	mask |= 1 << y;
+	_ctrl_reg_32_base[kCtrlReg32OffsetINTMS] = 0xffffffff;
   }
   uint16_t ConstructAdminCommand(int slot, AdminCommandSet op) {
     // returns CID
@@ -214,4 +221,5 @@ class DevNvme {
   void PrintCompletionQueueEntry(volatile CompletionQueueEntry *);
   void PrintAdminQueuesSettings();
   void PrintInterruptMask();
+  void InterruptHandler();
 };

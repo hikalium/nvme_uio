@@ -1,11 +1,10 @@
 #pragma once
 #include <stdio.h>
 
-// http://www.hep.by/gnu/kernel/uio-howto/uio_pci_generic_example.html
-
 class DevPci {
- public:
-  DevPci() {}
+public:
+  DevPci() {
+  }
   void Init() {
     _uiofd = open("/dev/uio0", O_RDONLY);
     if (_uiofd < 0) {
@@ -17,14 +16,6 @@ class DevPci {
       perror("config open:");
       panic("");
     }
-
-    /* Read and cache command value */
-    int err = pread(_configfd, &_command_high, 1, 5);
-    if (err != 1) {
-      perror("command config read:");
-      panic("");
-    }
-    _command_high &= ~0x4;
   }
   void ReadPciReg(uint16_t reg, uint8_t &val) {
     pread(_configfd, &val, 1, reg);
@@ -44,20 +35,17 @@ class DevPci {
   void WritePciReg(uint16_t reg, uint32_t val) {
     pwrite(_configfd, &val, 4, reg);
   }
-
   void WaitInterrupt() {
-    /* Re-enable interrupts. */
-    int err = pwrite(_configfd, &_command_high, 1, 5);
-    if (err != 1) {
-      perror("config write:");
-      panic("");
-    }
-    unsigned icount;
+    uint16_t command;
+    ReadPciReg(kCommandReg, command);
+    command &= ~kCommandRegInterruptDisableFlag;
+    WritePciReg(kCommandReg, command);
+
+    int icount;
     /* Wait for next interrupt. */
-    err = read(_uiofd, &icount, 4);
-    if (err != 4) {
+    if (read(_uiofd, &icount, 4) != 4) {
       perror("uio read:");
-      panic("");
+      exit(1);
     }
   }
 
@@ -95,8 +83,7 @@ class DevPci {
   // see PCI Local Bus Specification 6.8.1.3
   static const uint16_t kMsiCapRegControlMsiEnableFlag = 1 << 0;
   static const uint16_t kMsiCapRegControlMultiMsgCapOffset = 1;
-  static const uint16_t kMsiCapRegControlMultiMsgCapMask =
-      7 << kMsiCapRegControlMultiMsgCapOffset;
+  static const uint16_t kMsiCapRegControlMultiMsgCapMask = 7 << kMsiCapRegControlMultiMsgCapOffset;
   static const uint16_t kMsiCapRegControlMultiMsgEnableOffset = 4;
   static const uint16_t kMsiCapRegControlAddr64Flag = 1 << 7;
 
@@ -120,9 +107,8 @@ class DevPci {
   static const uint32_t kRegBaseAddrMaskMemAddr = 0xFFFFFFF0;
   static const uint32_t kRegBaseAddrMaskIoAddr = 0xFFFFFFFC;
 
- private:
+private:
   int _uiofd;
   int _configfd;
-  unsigned char _command_high;
 };
 

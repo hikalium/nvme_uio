@@ -244,6 +244,9 @@ void DevNvme::Init() {
     _asq[0].CDW10 |= 0;                // admin queue
     SetSQyTDBL(0, 1);                  // notify controller
   */
+  if (pthread_mutex_init(&_mp, NULL) < 0) {
+    perror("pthread_mutex_init:");
+  }
 
   Run();
   /*
@@ -275,12 +278,13 @@ void DevNvme::Init() {
 
 void DevNvme::IssueAdminIdentify(const Memory *prp1, uint32_t nsid,
                                  uint16_t cntid, uint8_t cns) {
-  int64_t next_slot = (GetSQyTDBL(0) + 1) % kASQSize;
-  ConstructAdminCommand(next_slot, AdminCommandSet::kIdentify);
-  _asq[next_slot].PRP1 = prp1->GetPhysPtr();
-  _asq[next_slot].NSID = nsid;
-  _asq[0].CDW10 = cntid << 16 | cns;
-
+  int32_t slot = GetSQyTDBL(0);
+  int32_t next_slot = (slot + 1) % kASQSize;
+  ConstructAdminCommand(slot, AdminCommandSet::kIdentify);
+  _asq[slot].PRP1 = prp1->GetPhysPtr();
+  _asq[slot].NSID = nsid;
+  _asq[slot].CDW10 = cntid << 16 | cns;
+  printf("Submitted to [%u]\n", slot);
   SetSQyTDBL(0, next_slot);  // notify controller
 }
 
@@ -294,3 +298,17 @@ void *DevNvme::Main(void *arg) {
   return NULL;
 }
 
+void DevNvme::InterruptHandler() {
+  SetInterruptMaskForQueue(0);
+  PrintInterruptMask();
+  int i = GetCQyHDBL(0);
+  printf("Completed: [%d] CID=%04X\n", i, _acq[i].SF.CID);
+  PrintCompletionQueueEntry(&_acq[i]); 
+  while(_acq[i].SF.P == _expectedCompletionQueueEntryPhase){
+    printf("Completed: CID=%04X\n", _acq[i].SF.CID);
+
+    i = (i + 1) % kACQSize;
+    if(i == 0) _expectedCompletionQueueEntryPhase = 1 - _expectedCompletionQueueEntryPhase;
+  }
+  SetCQyHDBL(0, i); // notify controller of interrupt handling completion
+}
