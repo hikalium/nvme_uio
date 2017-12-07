@@ -92,7 +92,6 @@ void DevNvme::PrintInterruptMask() {
 
 void DevNvme::Init() {
   _pci.Init();
-  _pci.AllowInterrupt();
   uint16_t vid, did;
   _pci.ReadPciReg(DevPci::kVendorIDReg, vid);
   _pci.ReadPciReg(DevPci::kDeviceIDReg, did);

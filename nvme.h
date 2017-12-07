@@ -22,6 +22,7 @@ class DevNvme {
       exit(1);
     }
     while (true) {
+      puts("Waiting for interrupt...");
       _pci.WaitInterrupt();
       puts("Interrupted!");
       /*

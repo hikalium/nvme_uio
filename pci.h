@@ -1,6 +1,8 @@
 #pragma once
 #include <stdio.h>
 
+// http://www.hep.by/gnu/kernel/uio-howto/uio_pci_generic_example.html
+
 class DevPci {
  public:
   DevPci() {}
@@ -15,6 +17,14 @@ class DevPci {
       perror("config open:");
       panic("");
     }
+
+    /* Read and cache command value */
+    int err = pread(_configfd, &_command_high, 1, 5);
+    if (err != 1) {
+      perror("command config read:");
+      panic("");
+    }
+    _command_high &= ~0x4;
   }
   void ReadPciReg(uint16_t reg, uint8_t &val) {
     pread(_configfd, &val, 1, reg);
@@ -34,30 +44,20 @@ class DevPci {
   void WritePciReg(uint16_t reg, uint32_t val) {
     pwrite(_configfd, &val, 4, reg);
   }
-  void AllowInterrupt() {
-    {
-      uint16_t command;
-      ReadPciReg(kCommandReg, command);
-      command &= ~kCommandRegInterruptDisableFlag;
-      WritePciReg(kCommandReg, command);
-    }
-    {
-      uint32_t info = 1; /* unmask */
-      size_t nb = write(_uiofd, &info, sizeof(info));
-      if (nb < sizeof(info)) {
-        perror("write");
-        exit(EXIT_FAILURE);
-      }
-    }
-  }
+
   void WaitInterrupt() {
-    {
-      uint32_t icount;
-      /* Wait for next interrupt. */
-      if (read(_uiofd, &icount, sizeof(icount)) != sizeof(icount)) {
-        perror("uio read:");
-        exit(EXIT_FAILURE);
-      }
+    /* Re-enable interrupts. */
+    int err = pwrite(_configfd, &_command_high, 1, 5);
+    if (err != 1) {
+      perror("config write:");
+      panic("");
+    }
+    unsigned icount;
+    /* Wait for next interrupt. */
+    err = read(_uiofd, &icount, 4);
+    if (err != 4) {
+      perror("uio read:");
+      panic("");
     }
   }
 
@@ -123,5 +123,6 @@ class DevPci {
  private:
   int _uiofd;
   int _configfd;
+  unsigned char _command_high;
 };
 
