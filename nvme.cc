@@ -43,18 +43,19 @@ void DevNvmeAdminQueue::SubmitCmdIdentify(const Memory *prp1, uint32_t nsid,
                                           uint16_t cntid, uint8_t cns) {
   pthread_mutex_lock(&mp);
   //
-  int32_t slot = _nvme->GetSQyTDBL(0);
-  int32_t next_slot = GetNextSlotOfSubmissionQueue(slot);
+  int32_t slot = _next_slot;
+  _next_slot = GetNextSlotOfSubmissionQueue(_next_slot);
   ConstructAdminCommand(slot, AdminCommandSet::kIdentify);
   _asq[slot].PRP1 = prp1->GetPhysPtr();
   _asq[slot].NSID = nsid;
   _asq[slot].CDW10 = cntid << 16 | cns;
-  printf("Submitted to [%u]\n", slot);
-  _nvme->SetSQyTDBL(slot, next_slot);  // notify controller
+  printf("Submitted to [%u], next is [%u]\n", slot, _next_slot);
+  _nvme->SetSQyTDBL(0, _next_slot);  // notify controller
   //
   pthread_cond_wait(&_ptCondList[slot], &mp);
   pthread_mutex_unlock(&mp);
 }
+
 void DevNvmeAdminQueue::InterruptHandler() {
   // TODO: Fix this for multiple queue
   int i = _nvme->GetCQyHDBL(0);

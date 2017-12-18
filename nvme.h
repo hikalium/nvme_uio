@@ -139,7 +139,7 @@ class DevNvmeAdminQueue {
 
   static const int kASQSize = 8;
   static const int kACQSize = 8;
-  int16_t _next_cid;  // being incremented by each command construction
+  int16_t _next_slot = 0;  // being incremented by each command construction
 
   Memory *_mem_for_asq;
   volatile CommandSet *_asq;
@@ -162,7 +162,8 @@ class DevNvme {
     while (true) {
       puts("Waiting for interrupt...");
       _pci.WaitInterrupt();
-      // SetInterruptMaskForQueue(0);
+      //
+      SetInterruptMaskForQueue(0);
       puts("Interrupted!");
       PrintInterruptMask();
       pthread_mutex_lock(&_adminQueue->mp);
@@ -173,7 +174,7 @@ class DevNvme {
       }
       pthread_mutex_unlock(&_adminQueue->mp);
       PrintInterruptMask();
-      // ClearInterruptMaskForQueue(0);
+      ClearInterruptMaskForQueue(0);
     }
   }
   static void *Main(void *);
