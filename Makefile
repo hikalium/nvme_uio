@@ -49,3 +49,6 @@ a.out: $(OBJS)
 
 clean:
 	-rm a.out $(DEPS) $(OBJS)
+
+watch_irq:
+	watch -n1 "cat /proc/interrupts"
