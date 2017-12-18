@@ -1,4 +1,5 @@
 #include "nvme.h"
+#include <stddef.h> /* offsetof */
 
 void DevNvmeAdminQueue::Init(DevNvme *nvme) {
   _nvme = nvme;
@@ -133,6 +134,7 @@ void DevNvme::PrintInterruptMask() {
 void DevNvme::Init() {
   assert(sizeof(CommandSet) == 64);
   assert(sizeof(CompletionQueueEntry) == 16);
+  assert(sizeof(IdentifyControllerData) == 4096);
   // sizeof(CompletionQueueEntry) may change
   // in the future impl (see section 4.6 in spec)
 
@@ -295,8 +297,11 @@ void *DevNvme::Main(void *arg) {
     //
     puts("Main: run cmd");
     if (strcmp(s, "list") == 0) {
-      Memory *prp1 = new Memory(4096);
-      nvme->_adminQueue->SubmitCmdIdentify(prp1, 0xffffffff, 0, 0x01);
+      Memory prp1(4096);
+      nvme->_adminQueue->SubmitCmdIdentify(&prp1, 0xffffffff, 0, 0x01);
+      IdentifyControllerData *idata = prp1.GetVirtPtr<IdentifyControllerData>();
+      printf("SN: %s\n", idata->SN);
+      printf("MN: %s\n", idata->MN);
     } else {
       printf("Unknown comand: %s\n", s);
     }
