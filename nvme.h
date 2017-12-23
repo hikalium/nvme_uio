@@ -309,6 +309,10 @@ class DevNvme {
   static const int kCC_AMS_RoundRobin = 0b000;
   static const int kCC_CSS_NVMeCommandSet = 0b000;
   static const int kCC_SHN_NoNotification = 0b00;
+  static const int kCC_SHN_AbruptShutdown = 0b10;
+
+  static const int kCSTS_SHST_Normal = 0b00;
+  static const int kCSTS_SHST_Completed = 0b10;
 
   static const __useconds_t kCtrlTimeout = 500 * 1000;
 

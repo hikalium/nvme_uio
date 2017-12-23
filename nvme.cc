@@ -196,14 +196,37 @@ void DevNvme::Init() {
   }
 
   {
-    // reset if needed
     ControllerStatus csts;
     csts.dword = _ctrl_reg_32_base[kCtrlReg32OffsetCSTS];
-    if (/*csts.bits.RDY*/ true) {
+    if (csts.bits.CFS){
+      puts("Controller is in fatal state. Please reboot.");
+      exit(EXIT_FAILURE);
+    }
+    if (csts.bits.RDY) {
+      if(csts.bits.SHST == kCSTS_SHST_Normal){
+        // shutdown if needed
+        puts("Performing shutdown...");
+        ControllerConfiguration cc;
+        cc.dword = _ctrl_reg_32_base[kCtrlReg32OffsetCC];
+        cc.bits.SHN = kCC_SHN_AbruptShutdown;
+        _ctrl_reg_32_base[kCtrlReg32OffsetCC] = cc.dword;
+        //
+        usleep(kCtrlTimeout);
+      }
+      csts.dword = _ctrl_reg_32_base[kCtrlReg32OffsetCSTS];
+      if (csts.bits.SHST != kCSTS_SHST_Completed) {
+        // wait more
+        usleep(_ctrl_timeout_worst);
+        if (csts.bits.SHST != kCSTS_SHST_Completed) {
+          puts("Failed to shutdown controller.");
+          exit(EXIT_FAILURE);
+        }
+      }
+      // reset controller
       puts("Performing reset...");
       ControllerConfiguration cc;
       cc.dword = _ctrl_reg_32_base[kCtrlReg32OffsetCC];
-      cc.bits.EN = 0;
+      cc.bits.SHN = kCC_SHN_AbruptShutdown;
       _ctrl_reg_32_base[kCtrlReg32OffsetCC] = cc.dword;
       //
       usleep(kCtrlTimeout);
@@ -211,7 +234,6 @@ void DevNvme::Init() {
       if (csts.bits.RDY) {
         // try again
         usleep(_ctrl_timeout_worst);
-        csts.dword = _ctrl_reg_32_base[kCtrlReg32OffsetCSTS];
         if (csts.bits.RDY) {
           puts("Failed to reset controller.");
           exit(EXIT_FAILURE);
@@ -300,8 +322,11 @@ void *DevNvme::Main(void *arg) {
       Memory prp1(4096);
       nvme->_adminQueue->SubmitCmdIdentify(&prp1, 0xffffffff, 0, 0x01);
       IdentifyControllerData *idata = prp1.GetVirtPtr<IdentifyControllerData>();
+      printf("VID: %4X\n", idata->VID);
+      printf("SSVID: %4X\n", idata->SSVID);
       printf("SN: %s\n", idata->SN);
       printf("MN: %s\n", idata->MN);
+      printf("FR: %s\n", idata->FR);
     } else {
       printf("Unknown comand: %s\n", s);
     }
