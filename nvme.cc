@@ -203,6 +203,7 @@ void DevNvme::Init() {
       exit(EXIT_FAILURE);
     }
     if (csts.bits.RDY) {
+      
       if(csts.bits.SHST == kCSTS_SHST_Normal){
         // shutdown if needed
         puts("Performing shutdown...");
@@ -222,11 +223,12 @@ void DevNvme::Init() {
           exit(EXIT_FAILURE);
         }
       }
+      
       // reset controller
       puts("Performing reset...");
       ControllerConfiguration cc;
       cc.dword = _ctrl_reg_32_base[kCtrlReg32OffsetCC];
-      cc.bits.SHN = kCC_SHN_AbruptShutdown;
+      cc.bits.EN = 0;
       _ctrl_reg_32_base[kCtrlReg32OffsetCC] = cc.dword;
       //
       usleep(kCtrlTimeout);
