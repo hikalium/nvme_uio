@@ -44,34 +44,32 @@ void DevNvmeAdminQueue::SubmitCmdIdentify(const Memory *prp1, uint32_t nsid,
                                           uint16_t cntid, uint8_t cns) {
   pthread_mutex_lock(&mp);
   //
-  int32_t slot = _next_slot;
-  _next_slot = GetNextSlotOfSubmissionQueue(_next_slot);
+  int32_t slot = _next_submission_slot;
+  _next_submission_slot = GetNextSlotOfSubmissionQueue(_next_submission_slot);
   ConstructAdminCommand(slot, AdminCommandSet::kIdentify);
   _asq[slot].PRP1 = prp1->GetPhysPtr();
   _asq[slot].NSID = nsid;
   _asq[slot].CDW10 = cntid << 16 | cns;
-  printf("Submitted to [%u], next is [%u]\n", slot, _next_slot);
-  _nvme->SetSQyTDBL(0, _next_slot);  // notify controller
+  printf("Submitted to [%u], next is [%u]\n", slot, _next_submission_slot);
+  _nvme->SetSQyTDBL(0, _next_submission_slot);  // notify controller
   //
   pthread_cond_wait(&_ptCondList[slot], &mp);
   pthread_mutex_unlock(&mp);
 }
 
 void DevNvmeAdminQueue::InterruptHandler() {
-  // TODO: Fix this for multiple queue
-  int i = _nvme->GetCQyHDBL(0);
-  while (_acq[i].SF.P == _expectedCompletionQueueEntryPhase) {
-    printf("Completed: CID=%04X\n", _acq[i].SF.CID);
-    _nvme->PrintCompletionQueueEntry(&_acq[i]);
-    pthread_cond_signal(&_ptCondList[i]);
+  while (_acq[_next_completion_slot].SF.P == _expectedCompletionQueueEntryPhase) {
+    printf("Completed: CID=%04X\n", _acq[_next_completion_slot].SF.CID);
+    _nvme->PrintCompletionQueueEntry(&_acq[_next_completion_slot]);
+    pthread_cond_signal(&_ptCondList[_next_completion_slot]);
     //
-    i = (i + 1) % kACQSize;
-    if (i == 0)
+    _next_completion_slot = (_next_completion_slot + 1) % kACQSize;
+    if (_next_completion_slot == 0)
       _expectedCompletionQueueEntryPhase =
           1 - _expectedCompletionQueueEntryPhase;
   }
   _nvme->SetCQyHDBL(0,
-                    i);  // notify controller of interrupt handling completion
+                    _next_completion_slot);  // notify controller of interrupt handling completion
 }
 
 void DevNvme::MapControlRegisters() {
@@ -316,23 +314,42 @@ void *DevNvme::Main(void *arg) {
   DevNvme *nvme = reinterpret_cast<DevNvme *>(arg);
 
   char s[128];
+  unsigned int nsid;
   while (fgets(s, sizeof(s), stdin)) {
     s[strlen(s) - 1] = 0;  // removes new line
-    //
-    puts("Main: run cmd");
+
     if (strcmp(s, "list") == 0) {
+      // TODO: support 1024< entries.
+      Memory prp1(4096);
+      nvme->_adminQueue->SubmitCmdIdentify(&prp1, 0x00000000, 0, 0x02);
+      uint32_t *id_list = prp1.GetVirtPtr<uint32_t>();
+      int i;
+      for(i = 0; i < 1024; i++){
+        if(id_list[i] == 0) break;
+        printf("%08X\n", id_list[i]);
+      }
+      printf("%d namespaces found.\n", i);
+    } else if(strcmp(s, "ctrlinfo") == 0){
       Memory prp1(4096);
       nvme->_adminQueue->SubmitCmdIdentify(&prp1, 0xffffffff, 0, 0x01);
       IdentifyControllerData *idata = prp1.GetVirtPtr<IdentifyControllerData>();
       printf("VID: %4X\n", idata->VID);
       printf("SSVID: %4X\n", idata->SSVID);
-      printf("SN: %s\n", idata->SN);
-      printf("MN: %s\n", idata->MN);
-      printf("FR: %s\n", idata->FR);
+      printf("SN: %.20s\n", idata->SN);
+      printf("MN: %.40s\n", idata->MN);
+      printf("FR: %.8s\n", idata->FR);
+    } else if(sscanf(s, "nsinfo %x", &nsid) == 1){
+      printf("Get info of NSID: %08X\n", nsid);
+      Memory prp1(4096);
+      nvme->_adminQueue->SubmitCmdIdentify(&prp1, nsid, 0, 0x00);
+      IdentifyNamespaceData *nsdata = prp1.GetVirtPtr<IdentifyNamespaceData>();
+      printf("NSZE: %ld\n", nsdata->NSZE);
+      printf("NCAP: %ld\n", nsdata->NCAP);
+      printf("NUSE: %ld\n", nsdata->NUSE);
+
     } else {
       printf("Unknown comand: %s\n", s);
     }
-    nvme->PrintInterruptMask();
     puts("Main: waiting for next input...");
   }
   puts("Main: return");

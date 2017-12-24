@@ -178,6 +178,12 @@ struct IdentifyControllerData {
   uint8_t VENDSPEC[1024];
 };
 
+struct IdentifyNamespaceData {
+  uint64_t NSZE;
+  uint64_t NCAP;
+  uint64_t NUSE;
+};
+
 class DevNvme;
 
 class DevNvmeAdminQueue {
@@ -216,7 +222,8 @@ class DevNvmeAdminQueue {
 
   static const int kASQSize = 8;
   static const int kACQSize = 8;
-  int16_t _next_slot = 0;  // being incremented by each command construction
+  int16_t _next_submission_slot = 0;  // being incremented by each command construction
+  int16_t _next_completion_slot = 0;
 
   Memory *_mem_for_asq;
   volatile CommandSet *_asq;
@@ -237,20 +244,15 @@ class DevNvme {
       exit(1);
     }
     while (true) {
-      puts("Waiting for interrupt...");
       _pci.WaitInterrupt();
       //
       SetInterruptMaskForQueue(0);
-      puts("Interrupted!");
-      PrintInterruptMask();
+      //puts("Interrupted!");
       pthread_mutex_lock(&_adminQueue->mp);
       {
-        puts("handler begin:");
         _adminQueue->InterruptHandler();
-        puts("handler end:");
       }
       pthread_mutex_unlock(&_adminQueue->mp);
-      PrintInterruptMask();
       ClearInterruptMaskForQueue(0);
     }
   }
@@ -273,17 +275,9 @@ class DevNvme {
   static const int kCtrlReg64OffsetACQ = 0x30 / sizeof(uint64_t);
   static const int kCtrlReg32OffsetDoorbellBase = 0x1000 / sizeof(uint32_t);
 
-  uint32_t GetSQyTDBL(int y) {
-    assert(_ctrl_reg_32_base != nullptr);
-    return _ctrl_reg_32_base[GetDoorbellIndex(y, 0)];
-  }
   void SetSQyTDBL(int y, uint64_t tail) {
     assert(_ctrl_reg_32_base != nullptr);
     _ctrl_reg_32_base[GetDoorbellIndex(y, 0)] = tail;
-  }
-  uint32_t GetCQyHDBL(int y) {
-    assert(_ctrl_reg_32_base != nullptr);
-    return _ctrl_reg_32_base[GetDoorbellIndex(y, 1)];
   }
   void SetCQyHDBL(int y, uint64_t head) {
     assert(_ctrl_reg_32_base != nullptr);
