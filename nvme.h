@@ -178,10 +178,39 @@ struct IdentifyControllerData {
   uint8_t VENDSPEC[1024];
 };
 
+struct IdentifyLBAFormatData {
+  uint16_t MS;
+  uint8_t LBADS;
+  unsigned RP: 2;
+  unsigned Reserved0: 6;
+};
+
 struct IdentifyNamespaceData {
   uint64_t NSZE;
   uint64_t NCAP;
   uint64_t NUSE;
+  uint8_t NSFEAT;
+  uint8_t NLBAF;
+  uint8_t FLBAS;
+  uint8_t MC;
+  uint8_t DPC;
+  uint8_t DPS;
+  uint8_t NMIC;
+  uint8_t RESCAP;
+  uint8_t FPI;
+  uint8_t DLFEAT;
+  uint16_t NAWUN;
+  uint16_t NAWUPF;
+  uint16_t NACWU;
+  uint16_t NABSN;
+  uint16_t NABO;
+  uint16_t NABSPF;
+  uint16_t NOIOB;
+  uint8_t NVMCAP[16];
+  uint8_t Reserved0[40];
+  uint8_t NGUID[16];
+  uint64_t EUI64;
+  struct IdentifyLBAFormatData LBAF[16];
 };
 
 class DevNvme;

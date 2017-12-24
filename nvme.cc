@@ -132,9 +132,10 @@ void DevNvme::PrintInterruptMask() {
 void DevNvme::Init() {
   assert(sizeof(CommandSet) == 64);
   assert(sizeof(CompletionQueueEntry) == 16);
-  assert(sizeof(IdentifyControllerData) == 4096);
   // sizeof(CompletionQueueEntry) may change
   // in the future impl (see section 4.6 in spec)
+  assert(sizeof(IdentifyControllerData) == 4096);
+  assert(offsetof(IdentifyNamespaceData, LBAF) == 128);
 
   _pci.Init();
   uint16_t vid, did;
@@ -343,10 +344,14 @@ void *DevNvme::Main(void *arg) {
       Memory prp1(4096);
       nvme->_adminQueue->SubmitCmdIdentify(&prp1, nsid, 0, 0x00);
       IdentifyNamespaceData *nsdata = prp1.GetVirtPtr<IdentifyNamespaceData>();
-      printf("NSZE: %ld\n", nsdata->NSZE);
-      printf("NCAP: %ld\n", nsdata->NCAP);
-      printf("NUSE: %ld\n", nsdata->NUSE);
-
+      
+      int LBAFindex = nsdata->FLBAS & 0xF;
+      printf("Current LBAFormat: %d\n", LBAFindex);
+      int LBASize = 1 << nsdata->LBAF[LBAFindex].LBADS;
+      printf("       block size: %d bytes\n", LBASize);
+      printf("NSZE: %ld blocks (%ld bytes)\n", nsdata->NSZE, nsdata->NSZE * LBASize);
+      printf("NCAP: %ld blocks (%ld bytes)\n", nsdata->NCAP, nsdata->NCAP * LBASize);
+      printf("NUSE: %ld blocks (%ld bytes)\n", nsdata->NUSE, nsdata->NUSE * LBASize);
     } else {
       printf("Unknown comand: %s\n", s);
     }
