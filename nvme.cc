@@ -58,7 +58,8 @@ void DevNvmeAdminQueue::SubmitCmdIdentify(const Memory *prp1, uint32_t nsid,
 }
 
 void DevNvmeAdminQueue::InterruptHandler() {
-  while (_acq[_next_completion_slot].SF.P == _expectedCompletionQueueEntryPhase) {
+  while (_acq[_next_completion_slot].SF.P ==
+         _expectedCompletionQueueEntryPhase) {
     printf("Completed: CID=%04X\n", _acq[_next_completion_slot].SF.CID);
     _nvme->PrintCompletionQueueEntry(&_acq[_next_completion_slot]);
     pthread_cond_signal(&_ptCondList[_next_completion_slot]);
@@ -69,7 +70,8 @@ void DevNvmeAdminQueue::InterruptHandler() {
           1 - _expectedCompletionQueueEntryPhase;
   }
   _nvme->SetCQyHDBL(0,
-                    _next_completion_slot);  // notify controller of interrupt handling completion
+                    _next_completion_slot);  // notify controller of interrupt
+                                             // handling completion
 }
 
 void DevNvme::MapControlRegisters() {
@@ -197,13 +199,12 @@ void DevNvme::Init() {
   {
     ControllerStatus csts;
     csts.dword = _ctrl_reg_32_base[kCtrlReg32OffsetCSTS];
-    if (csts.bits.CFS){
+    if (csts.bits.CFS) {
       puts("Controller is in fatal state. Please reboot.");
       exit(EXIT_FAILURE);
     }
     if (csts.bits.RDY) {
-      
-      if(csts.bits.SHST == kCSTS_SHST_Normal){
+      if (csts.bits.SHST == kCSTS_SHST_Normal) {
         // shutdown if needed
         puts("Performing shutdown...");
         ControllerConfiguration cc;
@@ -222,7 +223,7 @@ void DevNvme::Init() {
           exit(EXIT_FAILURE);
         }
       }
-      
+
       // reset controller
       puts("Performing reset...");
       ControllerConfiguration cc;
@@ -325,12 +326,12 @@ void *DevNvme::Main(void *arg) {
       nvme->_adminQueue->SubmitCmdIdentify(&prp1, 0x00000000, 0, 0x02);
       uint32_t *id_list = prp1.GetVirtPtr<uint32_t>();
       int i;
-      for(i = 0; i < 1024; i++){
-        if(id_list[i] == 0) break;
+      for (i = 0; i < 1024; i++) {
+        if (id_list[i] == 0) break;
         printf("%08X\n", id_list[i]);
       }
       printf("%d namespaces found.\n", i);
-    } else if(strcmp(s, "ctrlinfo") == 0){
+    } else if (strcmp(s, "ctrlinfo") == 0) {
       Memory prp1(4096);
       nvme->_adminQueue->SubmitCmdIdentify(&prp1, 0xffffffff, 0, 0x01);
       IdentifyControllerData *idata = prp1.GetVirtPtr<IdentifyControllerData>();
@@ -339,19 +340,22 @@ void *DevNvme::Main(void *arg) {
       printf("SN: %.20s\n", idata->SN);
       printf("MN: %.40s\n", idata->MN);
       printf("FR: %.8s\n", idata->FR);
-    } else if(sscanf(s, "nsinfo %x", &nsid) == 1){
+    } else if (sscanf(s, "nsinfo %x", &nsid) == 1) {
       printf("Get info of NSID: %08X\n", nsid);
       Memory prp1(4096);
       nvme->_adminQueue->SubmitCmdIdentify(&prp1, nsid, 0, 0x00);
       IdentifyNamespaceData *nsdata = prp1.GetVirtPtr<IdentifyNamespaceData>();
-      
+
       int LBAFindex = nsdata->FLBAS & 0xF;
       printf("Current LBAFormat: %d\n", LBAFindex);
       int LBASize = 1 << nsdata->LBAF[LBAFindex].LBADS;
       printf("       block size: %d bytes\n", LBASize);
-      printf("NSZE: %ld blocks (%ld bytes)\n", nsdata->NSZE, nsdata->NSZE * LBASize);
-      printf("NCAP: %ld blocks (%ld bytes)\n", nsdata->NCAP, nsdata->NCAP * LBASize);
-      printf("NUSE: %ld blocks (%ld bytes)\n", nsdata->NUSE, nsdata->NUSE * LBASize);
+      printf("NSZE: %ld blocks (%ld bytes)\n", nsdata->NSZE,
+             nsdata->NSZE * LBASize);
+      printf("NCAP: %ld blocks (%ld bytes)\n", nsdata->NCAP,
+             nsdata->NCAP * LBASize);
+      printf("NUSE: %ld blocks (%ld bytes)\n", nsdata->NUSE,
+             nsdata->NUSE * LBASize);
     } else {
       printf("Unknown comand: %s\n", s);
     }
@@ -360,4 +364,3 @@ void *DevNvme::Main(void *arg) {
   puts("Main: return");
   return NULL;
 }
-

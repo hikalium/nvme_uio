@@ -181,8 +181,8 @@ struct IdentifyControllerData {
 struct IdentifyLBAFormatData {
   uint16_t MS;
   uint8_t LBADS;
-  unsigned RP: 2;
-  unsigned Reserved0: 6;
+  unsigned RP : 2;
+  unsigned Reserved0 : 6;
 };
 
 struct IdentifyNamespaceData {
@@ -251,7 +251,8 @@ class DevNvmeAdminQueue {
 
   static const int kASQSize = 8;
   static const int kACQSize = 8;
-  int16_t _next_submission_slot = 0;  // being incremented by each command construction
+  int16_t _next_submission_slot =
+      0;  // being incremented by each command construction
   int16_t _next_completion_slot = 0;
 
   Memory *_mem_for_asq;
@@ -276,11 +277,9 @@ class DevNvme {
       _pci.WaitInterrupt();
       //
       SetInterruptMaskForQueue(0);
-      //puts("Interrupted!");
+      // puts("Interrupted!");
       pthread_mutex_lock(&_adminQueue->mp);
-      {
-        _adminQueue->InterruptHandler();
-      }
+      { _adminQueue->InterruptHandler(); }
       pthread_mutex_unlock(&_adminQueue->mp);
       ClearInterruptMaskForQueue(0);
     }
@@ -356,4 +355,3 @@ class DevNvme {
             sizeof(uint32_t));
   }
 };
-
