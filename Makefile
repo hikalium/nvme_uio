@@ -20,7 +20,9 @@ check:
 	@echo "   bus: $(TARGET_PCI_BUS_ID)"
 	@echo "vendor: $(TARGET_PCI_VID)"
 	@echo "device: $(TARGET_PCI_DID)"
-	@echo "driver: $(TARGET_KERNEL_DRIVER
+	@echo "driver: $(TARGET_KERNEL_DRIVER)"
+
+load:
 	sudo modprobe uio_pci_generic
 	sudo sh -c "echo '$(TARGET_PCI_VID) $(TARGET_PCI_DID)' > /sys/bus/pci/drivers/uio_pci_generic/new_id"
 	sudo sh -c "echo -n 0000:$(TARGET_PCI_BUS_ID) > /sys/bus/pci/drivers/$(TARGET_KERNEL_DRIVER)/unbind"
