@@ -10,10 +10,13 @@ void DevNvme::Init() {
   assert(offsetof(IdentifyNamespaceData, LBAF) == 128);
 
   _pci.Init();
-  uint16_t vid, did;
-  _pci.ReadPciReg(DevPci::kVendorIDReg, vid);
-  _pci.ReadPciReg(DevPci::kDeviceIDReg, did);
-  printf("vid:%08X did:%08X\n", vid, did);
+  assert(_pci.HasClassCodes(0x01, 0x08, 0x02));
+  {
+    uint16_t vid, did;
+    _pci.ReadPciReg(DevPci::kVendorIDReg, vid);
+    _pci.ReadPciReg(DevPci::kDeviceIDReg, did);
+    printf("vid:%08X did:%08X\n", vid, did);
+  }
   {
     // Enable Bus Master for transfering data from controller to host.
     uint8_t interface, sub, base;
@@ -25,26 +28,7 @@ void DevNvme::Init() {
     command |= DevPci::kCommandRegBusMasterEnableFlag;
     _pci.WritePciReg(DevPci::kCommandReg, command);
   }
-  {
-    uint8_t cap;
-    _pci.ReadPciReg(DevPci::kCapPtrReg, cap);
-    printf("PCI.CAP=%02X\n", cap);
-  }
-  {
-    uint16_t sts;
-    _pci.ReadPciReg(DevPci::kStatusReg, sts);
-    printf("PCI.STS=%04X\n", sts);
-  }
-  {
-    uint16_t cmd;
-    _pci.ReadPciReg(DevPci::kCommandReg, cmd);
-    printf("PCI.CMD=%04X\n", cmd);
-  }
-  {
-    uint8_t cmd;
-    _pci.ReadPciReg(0x50, cmd);
-    printf("MSI.=%04X\n", cmd);
-  }
+
   MapControlRegisters();
 
   {
@@ -70,7 +54,7 @@ void DevNvme::Init() {
     ControllerStatus csts;
     csts.dword = _ctrl_reg_32_base[kCtrlReg32OffsetCSTS];
     if (csts.bits.CFS) {
-      puts("Controller is in fatal state. Please reboot.");
+      puts("Controller is in fatal state. Please reboot this machine.");
       exit(EXIT_FAILURE);
     }
     if (csts.bits.RDY) {
@@ -118,18 +102,6 @@ void DevNvme::Init() {
 
   _adminQueue = new DevNvmeAdminQueue();
   _adminQueue->Init(this);
-  PrintAdminQueuesSettings();
-
-  {
-    ControllerConfiguration cc;
-    cc.dword = _ctrl_reg_32_base[kCtrlReg32OffsetCC];
-    PrintControllerConfiguration(cc);
-  }
-  {
-    ControllerStatus csts;
-    csts.dword = _ctrl_reg_32_base[kCtrlReg32OffsetCSTS];
-    PrintControllerStatus(csts);
-  }
 
   {
     // set ControllerConfiguration
@@ -168,41 +140,35 @@ void DevNvme::Init() {
 
   // Controller initialize completed.
   puts("Controller initialized.");
-  {
-    ControllerConfiguration cc;
-    cc.dword = _ctrl_reg_32_base[kCtrlReg32OffsetCC];
-    PrintControllerConfiguration(cc);
-  }
-  {
-    ControllerStatus csts;
-    csts.dword = _ctrl_reg_32_base[kCtrlReg32OffsetCSTS];
-    PrintControllerStatus(csts);
-  }
   Run();
   return;
 }
 
 void DevNvme::Run() {
-  pthread_t tid;
-  if (pthread_create(&tid, NULL, Main, this) != 0) {
+  if (pthread_create(&_irq_handler_thread, NULL, IrqHandler, this) != 0) {
     perror("pthread_create:");
     exit(1);
   }
+  AttachAllNamespaces();
+}
+
+void *DevNvme::IrqHandler(void *arg) {
+  DevNvme *nvme = reinterpret_cast<DevNvme *>(arg);
+
   while (true) {
-    _pci.WaitInterrupt();
-    //
-    SetInterruptMaskForQueue(0);
-    // puts("Interrupted!");
-    pthread_mutex_lock(&_adminQueue->mp);
-    { _adminQueue->InterruptHandler(); }
-    pthread_mutex_unlock(&_adminQueue->mp);
-    ClearInterruptMaskForQueue(0);
+    nvme->_pci.WaitInterrupt();
+    // admin queue
+    nvme->SetInterruptMaskForQueue(0);
+    {
+      pthread_mutex_lock(&nvme->_adminQueue->mp);
+      nvme->_adminQueue->InterruptHandler();
+      pthread_mutex_unlock(&nvme->_adminQueue->mp);
+    }
+    nvme->ClearInterruptMaskForQueue(0);
   }
 }
 
-void *DevNvme::Main(void *arg) {
-  DevNvme *nvme = reinterpret_cast<DevNvme *>(arg);
-
+void DevNvme::AttachAllNamespaces() {
   char s[128];
   unsigned int nsid;
   while (fgets(s, sizeof(s), stdin)) {
@@ -211,7 +177,7 @@ void *DevNvme::Main(void *arg) {
     if (strcmp(s, "list") == 0) {
       // TODO: support 1024< entries.
       Memory prp1(4096);
-      nvme->_adminQueue->SubmitCmdIdentify(&prp1, 0x00000000, 0, 0x02);
+      _adminQueue->SubmitCmdIdentify(&prp1, 0x00000000, 0, 0x02);
       uint32_t *id_list = prp1.GetVirtPtr<uint32_t>();
       int i;
       for (i = 0; i < 1024; i++) {
@@ -221,7 +187,7 @@ void *DevNvme::Main(void *arg) {
       printf("%d namespaces found.\n", i);
     } else if (strcmp(s, "ctrlinfo") == 0) {
       Memory prp1(4096);
-      nvme->_adminQueue->SubmitCmdIdentify(&prp1, 0xffffffff, 0, 0x01);
+      _adminQueue->SubmitCmdIdentify(&prp1, 0xffffffff, 0, 0x01);
       IdentifyControllerData *idata = prp1.GetVirtPtr<IdentifyControllerData>();
       printf("VID: %4X\n", idata->VID);
       printf("SSVID: %4X\n", idata->SSVID);
@@ -231,7 +197,7 @@ void *DevNvme::Main(void *arg) {
     } else if (sscanf(s, "nsinfo %x", &nsid) == 1) {
       printf("Get info of NSID: %08X\n", nsid);
       Memory prp1(4096);
-      nvme->_adminQueue->SubmitCmdIdentify(&prp1, nsid, 0, 0x00);
+      _adminQueue->SubmitCmdIdentify(&prp1, nsid, 0, 0x00);
       IdentifyNamespaceData *nsdata = prp1.GetVirtPtr<IdentifyNamespaceData>();
 
       int LBAFindex = nsdata->FLBAS & 0xF;
@@ -247,10 +213,7 @@ void *DevNvme::Main(void *arg) {
     } else {
       printf("Unknown comand: %s\n", s);
     }
-    puts("Main: waiting for next input...");
   }
-  puts("Main: return");
-  return NULL;
 }
 
 void DevNvme::MapControlRegisters() {

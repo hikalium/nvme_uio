@@ -21,7 +21,6 @@ class DevNvme {
  public:
   void Init();
   void Run();
-  static void *Main(void *);
   size_t GetCommandSetSize() { return sizeof(CommandSet); }
   size_t GetCompletionQueueEntrySize() { return sizeof(CompletionQueueEntry); }
 
@@ -64,6 +63,7 @@ class DevNvme {
  private:
   DevPci _pci;
   DevNvmeAdminQueue *_adminQueue;
+  pthread_t _irq_handler_thread;
 
   static const int kCC_AMS_RoundRobin = 0b000;
   static const int kCC_CSS_NVMeCommandSet = 0b000;
@@ -91,4 +91,6 @@ class DevNvme {
            ((2 * y + isCompletionQueue) * (4 << _doorbell_stride) /
             sizeof(uint32_t));
   }
+  void AttachAllNamespaces();
+  static void *IrqHandler(void *);
 };

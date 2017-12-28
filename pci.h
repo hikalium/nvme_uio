@@ -2,9 +2,8 @@
 #include <stdio.h>
 
 class DevPci {
-public:
-  DevPci() {
-  }
+ public:
+  DevPci() {}
   void Init() {
     _uiofd = open("/dev/uio0", O_RDONLY);
     if (_uiofd < 0) {
@@ -48,6 +47,15 @@ public:
       exit(1);
     }
   }
+  bool HasClassCodes(uint8_t req_base_class, uint8_t req_sub_class,
+                     uint8_t req_program_interface) {
+    uint8_t base_class, sub_class, program_interface;
+    ReadPciReg(kRegInterfaceClassCode, program_interface);
+    ReadPciReg(kRegSubClassCode, sub_class);
+    ReadPciReg(kRegBaseClassCode, base_class);
+    return (req_base_class == base_class && req_sub_class == sub_class &&
+            req_program_interface == program_interface);
+  }
 
   static const uint16_t kVendorIDReg = 0x00;
   static const uint16_t kDeviceIDReg = 0x02;
@@ -83,7 +91,8 @@ public:
   // see PCI Local Bus Specification 6.8.1.3
   static const uint16_t kMsiCapRegControlMsiEnableFlag = 1 << 0;
   static const uint16_t kMsiCapRegControlMultiMsgCapOffset = 1;
-  static const uint16_t kMsiCapRegControlMultiMsgCapMask = 7 << kMsiCapRegControlMultiMsgCapOffset;
+  static const uint16_t kMsiCapRegControlMultiMsgCapMask =
+      7 << kMsiCapRegControlMultiMsgCapOffset;
   static const uint16_t kMsiCapRegControlMultiMsgEnableOffset = 4;
   static const uint16_t kMsiCapRegControlAddr64Flag = 1 << 7;
 
@@ -107,8 +116,7 @@ public:
   static const uint32_t kRegBaseAddrMaskMemAddr = 0xFFFFFFF0;
   static const uint32_t kRegBaseAddrMaskIoAddr = 0xFFFFFFFC;
 
-private:
+ private:
   int _uiofd;
   int _configfd;
 };
-

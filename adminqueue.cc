@@ -12,13 +12,9 @@ void DevNvmeAdminQueue::Init(DevNvme *nvme) {
 
   nvme->SetCtrlReg64(DevNvme::kCtrlReg64OffsetASQ, _mem_for_asq->GetPhysPtr());
   _asq = _mem_for_asq->GetVirtPtr<volatile CommandSet>();
-  printf("ASQ @ %p, physical = %p\n", (void *)_asq,
-         (void *)_mem_for_asq->GetPhysPtr());
 
   nvme->SetCtrlReg64(DevNvme::kCtrlReg64OffsetACQ, _mem_for_acq->GetPhysPtr());
   _acq = _mem_for_acq->GetVirtPtr<volatile CompletionQueueEntry>();
-  printf("ACQ @ %p, physical = %p\n", (void *)_acq,
-         (void *)_mem_for_acq->GetPhysPtr());
 
   {
     uint32_t aqa = 0;
@@ -26,6 +22,7 @@ void DevNvmeAdminQueue::Init(DevNvme *nvme) {
     aqa |= (0xfff & kASQSize);
     nvme->SetCtrlReg32(DevNvme::kCtrlReg32OffsetAQA, aqa);
   }
+
   _ptCondList = reinterpret_cast<pthread_cond_t *>(
       malloc(sizeof(pthread_cond_t) * _mem_for_asq->GetSize()));
   if (!_ptCondList) {
@@ -49,7 +46,6 @@ void DevNvmeAdminQueue::SubmitCmdIdentify(const Memory *prp1, uint32_t nsid,
   _asq[slot].PRP1 = prp1->GetPhysPtr();
   _asq[slot].NSID = nsid;
   _asq[slot].CDW10 = cntid << 16 | cns;
-  printf("Submitted to [%u], next is [%u]\n", slot, _next_submission_slot);
   _nvme->SetSQyTDBL(0, _next_submission_slot);  // notify controller
   //
   pthread_cond_wait(&_ptCondList[slot], &mp);
@@ -59,7 +55,6 @@ void DevNvmeAdminQueue::SubmitCmdIdentify(const Memory *prp1, uint32_t nsid,
 void DevNvmeAdminQueue::InterruptHandler() {
   while (_acq[_next_completion_slot].SF.P ==
          _expectedCompletionQueueEntryPhase) {
-    printf("Completed: CID=%04X\n", _acq[_next_completion_slot].SF.CID);
     _nvme->PrintCompletionQueueEntry(&_acq[_next_completion_slot]);
     pthread_cond_signal(&_ptCondList[_next_completion_slot]);
     //
