@@ -159,11 +159,7 @@ void *DevNvme::IrqHandler(void *arg) {
     nvme->_pci.WaitInterrupt();
     // admin queue
     nvme->SetInterruptMaskForQueue(0);
-    {
-      pthread_mutex_lock(&nvme->_adminQueue->mp);
-      nvme->_adminQueue->InterruptHandler();
-      pthread_mutex_unlock(&nvme->_adminQueue->mp);
-    }
+    nvme->_adminQueue->InterruptHandler();
     nvme->ClearInterruptMaskForQueue(0);
   }
 }

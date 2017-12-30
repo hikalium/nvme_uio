@@ -2,19 +2,14 @@
 
 void DevNvmeAdminQueue::Init(DevNvme *nvme) {
   _nvme = nvme;
-  if (pthread_mutex_init(&mp, NULL) < 0) {
-    perror("pthread_mutex_init:");
-  }
-  _mem_for_asq = new Memory(nvme->GetCommandSetSize() * kASQSize);
-  _mem_for_acq = new Memory(nvme->GetCompletionQueueEntrySize() * kACQSize);
-  bzero(_mem_for_acq->GetVirtPtr<void>(),
-        _mem_for_acq->GetSize());  // clear phase tag.
 
-  nvme->SetCtrlReg64(DevNvme::kCtrlReg64OffsetASQ, _mem_for_asq->GetPhysPtr());
-  _asq = _mem_for_asq->GetVirtPtr<volatile CommandSet>();
+  _queue = new DevNvmeQueue();
+  _queue->Init(_nvme, 0, kASQSize, kACQSize);
 
-  nvme->SetCtrlReg64(DevNvme::kCtrlReg64OffsetACQ, _mem_for_acq->GetPhysPtr());
-  _acq = _mem_for_acq->GetVirtPtr<volatile CompletionQueueEntry>();
+  nvme->SetCtrlReg64(DevNvme::kCtrlReg64OffsetASQ,
+                     _queue->GetSubmissionQueuePhysPtr());
+  nvme->SetCtrlReg64(DevNvme::kCtrlReg64OffsetACQ,
+                     _queue->GetCompletionQueuePhysPtr());
 
   {
     uint32_t aqa = 0;
@@ -22,48 +17,46 @@ void DevNvmeAdminQueue::Init(DevNvme *nvme) {
     aqa |= (0xfff & kASQSize);
     nvme->SetCtrlReg32(DevNvme::kCtrlReg32OffsetAQA, aqa);
   }
-
-  _ptCondList = reinterpret_cast<pthread_cond_t *>(
-      malloc(sizeof(pthread_cond_t) * _mem_for_asq->GetSize()));
-  if (!_ptCondList) {
-    perror("_ptCondList");
-    exit(EXIT_FAILURE);
-  }
-  for (unsigned int i = 0; i < _mem_for_asq->GetSize(); i++) {
-    if (pthread_cond_init(&_ptCondList[i], NULL)) {
-      perror("pthread_cond_init");
-      exit(EXIT_FAILURE);
-    }
-  }
 }
 void DevNvmeAdminQueue::SubmitCmdIdentify(const Memory *prp1, uint32_t nsid,
                                           uint16_t cntid, uint8_t cns) {
-  pthread_mutex_lock(&mp);
+  _queue->Lock();
+  int32_t slot = _queue->GetNextSubmissionSlot();
   //
-  int32_t slot = _next_submission_slot;
-  _next_submission_slot = GetNextSlotOfSubmissionQueue(_next_submission_slot);
+  volatile CommandSet *cmd = _queue->GetCommandSet(slot);
   ConstructAdminCommand(slot, AdminCommandSet::kIdentify);
-  _asq[slot].PRP1 = prp1->GetPhysPtr();
-  _asq[slot].NSID = nsid;
-  _asq[slot].CDW10 = cntid << 16 | cns;
-  _nvme->SetSQyTDBL(0, _next_submission_slot);  // notify controller
+  cmd->PRP1 = prp1->GetPhysPtr();
+  cmd->NSID = nsid;
+  cmd->CDW10 = cntid << 16 | cns;
   //
-  pthread_cond_wait(&_ptCondList[slot], &mp);
-  pthread_mutex_unlock(&mp);
+  _queue->SubmitCommand();
+  _queue->WaitUntilCompletion(slot);
+  _queue->Unlock();
 }
-
-void DevNvmeAdminQueue::InterruptHandler() {
-  while (_acq[_next_completion_slot].SF.P ==
-         _expectedCompletionQueueEntryPhase) {
-    _nvme->PrintCompletionQueueEntry(&_acq[_next_completion_slot]);
-    pthread_cond_signal(&_ptCondList[_next_completion_slot]);
-    //
-    _next_completion_slot = (_next_completion_slot + 1) % kACQSize;
-    if (_next_completion_slot == 0)
-      _expectedCompletionQueueEntryPhase =
-          1 - _expectedCompletionQueueEntryPhase;
+int DevNvmeAdminQueue::GetSubmissionQueueSize() {
+  return _queue->GetSubmissionQueueSize();
+};
+int DevNvmeAdminQueue::GetCompletionQueueSize() {
+  return _queue->GetCompletionQueueSize();
+};
+void DevNvmeAdminQueue::InterruptHandler() { _queue->InterruptHandler(); };
+uint16_t DevNvmeAdminQueue::ConstructAdminCommand(int slot,
+                                                  AdminCommandSet op) {
+  // returns CID
+  // Set CDW0 for op.
+  volatile CommandSet *cmd = _queue->GetCommandSet(slot);
+  cmd->CDW0.OPC = static_cast<int>(op);
+  cmd->CDW0.CID = slot;
+  switch (op) {
+    case AdminCommandSet::kIdentify:
+      cmd->CDW0.FUSE = kFUSE_Normal;
+      cmd->CDW0.PSDT = kPSDT_UsePRP;
+      break;
+    case AdminCommandSet::kAbort:
+      break;
+    default:
+      printf("Tried to construct unknown command %d\n", static_cast<int>(op));
+      exit(EXIT_FAILURE);
   }
-  _nvme->SetCQyHDBL(0,
-                    _next_completion_slot);  // notify controller of interrupt
-                                             // handling completion
-}
+  return slot;
+};
