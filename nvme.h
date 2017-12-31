@@ -17,6 +17,9 @@
 #include "adminqueue.h"
 class DevNvmeAdminQueue;
 
+#include "ioqueue.h"
+class DevNvmeIoQueue;
+
 class DevNvme {
  public:
   void Init();
@@ -61,9 +64,10 @@ class DevNvme {
   void PrintInterruptMask();
 
  private:
+  pthread_t _irq_handler_thread;
   DevPci _pci;
   DevNvmeAdminQueue *_adminQueue;
-  pthread_t _irq_handler_thread;
+  DevNvmeIoQueue *_ioQueue;
 
   static const int kCC_AMS_RoundRobin = 0b000;
   static const int kCC_CSS_NVMeCommandSet = 0b000;

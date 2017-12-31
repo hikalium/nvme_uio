@@ -9,13 +9,13 @@ class DevNvmeQueue {
   int GetCompletionQueueSize() { return _cq_size; }
   const size_t GetSubmissionQueuePhysPtr() { return _mem_for_sq->GetPhysPtr(); }
   const size_t GetCompletionQueuePhysPtr() { return _mem_for_cq->GetPhysPtr(); }
+  const Memory *GetSubmissionQueueMemory() { return _mem_for_sq; }
+  const Memory *GetCompletionQueueMemory() { return _mem_for_cq; }
   void Init(DevNvme *nvme, int id, int sq_size, int cq_size);
   void InterruptHandler();
   void Lock() { pthread_mutex_lock(&_mp); }
   void SubmitCommand();
-  void WaitUntilCompletion(int slot) {
-    pthread_cond_wait(&_pt_cond_list[slot], &_mp);
-  }
+  volatile CompletionQueueEntry *WaitUntilCompletion(int slot);
   void Unlock() { pthread_mutex_unlock(&_mp); }
   int GetNextSubmissionSlot() { return _next_submission_slot; }
   volatile CommandSet *GetCommandSet(int slot) {

@@ -5,6 +5,12 @@ void DevNvmeQueue::SubmitCommand() {
   _nvme->SetSQyTDBL(_id, _next_submission_slot);
 }
 
+volatile CompletionQueueEntry *DevNvmeQueue::WaitUntilCompletion(int slot) {
+  pthread_cond_wait(&_pt_cond_list[slot], &_mp);
+  // TODO: Fix index
+  return &_cq[slot];
+}
+
 void DevNvmeQueue::Init(DevNvme *nvme, int id, int sq_size, int cq_size) {
   _nvme = nvme;
   _id = id;

@@ -166,29 +166,36 @@ void DevNvme::AttachAllNamespaces() {
   puts("Attach all name");
   char s[128];
   unsigned int nsid;
+  {
+    Memory prp1(4096);
+    _adminQueue->SubmitCmdIdentify(&prp1, 0xffffffff, 0, 0x01);
+    IdentifyControllerData *idata = prp1.GetVirtPtr<IdentifyControllerData>();
+    printf("VID: %4X\n", idata->VID);
+    printf("SSVID: %4X\n", idata->SSVID);
+    printf("SN: %.20s\n", idata->SN);
+    printf("MN: %.40s\n", idata->MN);
+    printf("FR: %.8s\n", idata->FR);
+  }
+  {
+    // TODO: support 1024< entries.
+    Memory prp1(4096);
+    _adminQueue->SubmitCmdIdentify(&prp1, 0x00000000, 0, 0x02);
+    uint32_t *id_list = prp1.GetVirtPtr<uint32_t>();
+    int i;
+    for (i = 0; i < 1024; i++) {
+      if (id_list[i] == 0) break;
+      printf("%08X\n", id_list[i]);
+    }
+    printf("%d namespaces found.\n", i);
+  }
+
+  _ioQueue = new DevNvmeIoQueue();
+  _ioQueue->Init(this, _adminQueue, 1, 8, 8);
+
   while (fgets(s, sizeof(s), stdin)) {
     s[strlen(s) - 1] = 0;  // removes new line
 
     if (strcmp(s, "list") == 0) {
-      // TODO: support 1024< entries.
-      Memory prp1(4096);
-      _adminQueue->SubmitCmdIdentify(&prp1, 0x00000000, 0, 0x02);
-      uint32_t *id_list = prp1.GetVirtPtr<uint32_t>();
-      int i;
-      for (i = 0; i < 1024; i++) {
-        if (id_list[i] == 0) break;
-        printf("%08X\n", id_list[i]);
-      }
-      printf("%d namespaces found.\n", i);
-    } else if (strcmp(s, "ctrlinfo") == 0) {
-      Memory prp1(4096);
-      _adminQueue->SubmitCmdIdentify(&prp1, 0xffffffff, 0, 0x01);
-      IdentifyControllerData *idata = prp1.GetVirtPtr<IdentifyControllerData>();
-      printf("VID: %4X\n", idata->VID);
-      printf("SSVID: %4X\n", idata->SSVID);
-      printf("SN: %.20s\n", idata->SN);
-      printf("MN: %.40s\n", idata->MN);
-      printf("FR: %.8s\n", idata->FR);
     } else if (sscanf(s, "nsinfo %x", &nsid) == 1) {
       printf("Get info of NSID: %08X\n", nsid);
       Memory prp1(4096);
