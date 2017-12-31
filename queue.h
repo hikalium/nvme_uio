@@ -5,14 +5,10 @@ class DevNvme;
 
 class DevNvmeQueue {
  public:
-  int GetSubmissionQueueSize() { return _sq_size; };
-  int GetCompletionQueueSize() { return _cq_size; };
-  const size_t GetSubmissionQueuePhysPtr() {
-    return _mem_for_sq->GetPhysPtr();
-  };
-  const size_t GetCompletionQueuePhysPtr() {
-    return _mem_for_cq->GetPhysPtr();
-  };
+  int GetSubmissionQueueSize() { return _sq_size; }
+  int GetCompletionQueueSize() { return _cq_size; }
+  const size_t GetSubmissionQueuePhysPtr() { return _mem_for_sq->GetPhysPtr(); }
+  const size_t GetCompletionQueuePhysPtr() { return _mem_for_cq->GetPhysPtr(); }
   void Init(DevNvme *nvme, int id, int sq_size, int cq_size);
   void InterruptHandler();
   void Lock() { pthread_mutex_lock(&_mp); }
@@ -21,10 +17,10 @@ class DevNvmeQueue {
     pthread_cond_wait(&_pt_cond_list[slot], &_mp);
   }
   void Unlock() { pthread_mutex_unlock(&_mp); }
-  int GetNextSubmissionSlot() { return _next_submission_slot; };
+  int GetNextSubmissionSlot() { return _next_submission_slot; }
   volatile CommandSet *GetCommandSet(int slot) {
     assert(0 <= slot && slot < _sq_size);
-    return &_mem_for_sq->GetVirtPtr<CommandSet>()[slot];
+    return &_sq[slot];
   }
 
  private:
@@ -45,5 +41,5 @@ class DevNvmeQueue {
   volatile CompletionQueueEntry *_cq;
 
   int _expected_completion_phase = 1;
-  pthread_cond_t *_pt_cond_list;  // same number of elements of _asq
+  pthread_cond_t *_pt_cond_list;  // same number of elements of submission queue
 };

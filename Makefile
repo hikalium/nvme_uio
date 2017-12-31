@@ -44,6 +44,10 @@ run: a.out
 	sudo sh -c "echo 120 > /proc/sys/vm/nr_hugepages"
 	sudo ./a.out
 
+gdb: a.out
+	sudo sh -c "echo 120 > /proc/sys/vm/nr_hugepages"
+	sudo gdb ./a.out
+
 a.out: $(OBJS)
 	g++ $(CXXFLAGS) $^
 

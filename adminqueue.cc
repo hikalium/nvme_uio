@@ -18,6 +18,7 @@ void DevNvmeAdminQueue::Init(DevNvme *nvme) {
     nvme->SetCtrlReg32(DevNvme::kCtrlReg32OffsetAQA, aqa);
   }
 }
+
 void DevNvmeAdminQueue::SubmitCmdIdentify(const Memory *prp1, uint32_t nsid,
                                           uint16_t cntid, uint8_t cns) {
   _queue->Lock();
@@ -33,13 +34,17 @@ void DevNvmeAdminQueue::SubmitCmdIdentify(const Memory *prp1, uint32_t nsid,
   _queue->WaitUntilCompletion(slot);
   _queue->Unlock();
 }
+
 int DevNvmeAdminQueue::GetSubmissionQueueSize() {
   return _queue->GetSubmissionQueueSize();
-};
+}
+
 int DevNvmeAdminQueue::GetCompletionQueueSize() {
   return _queue->GetCompletionQueueSize();
-};
-void DevNvmeAdminQueue::InterruptHandler() { _queue->InterruptHandler(); };
+}
+
+void DevNvmeAdminQueue::InterruptHandler() { _queue->InterruptHandler(); }
+
 uint16_t DevNvmeAdminQueue::ConstructAdminCommand(int slot,
                                                   AdminCommandSet op) {
   // returns CID
@@ -59,4 +64,4 @@ uint16_t DevNvmeAdminQueue::ConstructAdminCommand(int slot,
       exit(EXIT_FAILURE);
   }
   return slot;
-};
+}

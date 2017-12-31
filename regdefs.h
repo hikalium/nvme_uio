@@ -1,18 +1,5 @@
 #pragma once
 
-//#include <errno.h>
-//#include <pthread.h>
-//#include <semaphore.h>
-//#include <stdint.h>
-//#include <stdio.h>
-//#include <stdlib.h>
-//#include <string.h>
-//
-//#include "generic.h"
-//#include "mem.h"
-//#include "pci.h"
-
-//#include "adminqueue.h"
 static const int kFUSE_Normal = 0b00;
 static const int kPSDT_UsePRP = 0b00;
 struct CommandSet {

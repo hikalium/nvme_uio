@@ -158,13 +158,12 @@ void *DevNvme::IrqHandler(void *arg) {
   while (true) {
     nvme->_pci.WaitInterrupt();
     // admin queue
-    nvme->SetInterruptMaskForQueue(0);
     nvme->_adminQueue->InterruptHandler();
-    nvme->ClearInterruptMaskForQueue(0);
   }
 }
 
 void DevNvme::AttachAllNamespaces() {
+  puts("Attach all name");
   char s[128];
   unsigned int nsid;
   while (fgets(s, sizeof(s), stdin)) {
