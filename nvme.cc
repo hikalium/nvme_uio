@@ -176,6 +176,8 @@ void DevNvme::AttachAllNamespaces() {
     printf("MN: %.40s\n", idata->MN);
     printf("FR: %.8s\n", idata->FR);
   }
+  _ioQueue = new DevNvmeIoQueue();
+  _ioQueue->Init(this, _adminQueue, 1, 8, 8);
   {
     // TODO: support 1024< entries.
     Memory prp1(4096);
@@ -185,12 +187,10 @@ void DevNvme::AttachAllNamespaces() {
     for (i = 0; i < 1024; i++) {
       if (id_list[i] == 0) break;
       printf("%08X\n", id_list[i]);
+      _adminQueue->AttachNamespace(id_list[i], 1);
     }
     printf("%d namespaces found.\n", i);
   }
-
-  _ioQueue = new DevNvmeIoQueue();
-  _ioQueue->Init(this, _adminQueue, 1, 8, 8);
 
   while (fgets(s, sizeof(s), stdin)) {
     s[strlen(s) - 1] = 0;  // removes new line

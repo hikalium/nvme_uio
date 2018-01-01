@@ -16,6 +16,9 @@ class DevNvmeAdminQueue {
       const Memory *prp1, uint16_t size, uint16_t qid, uint16_t cqid);
   volatile CompletionQueueEntry *SubmitCmdCreateIoCompletionQueue(
       const Memory *prp1, uint16_t size, uint16_t qid);
+  volatile CompletionQueueEntry *AttachNamespace(uint16_t nsid, uint16_t qid);
+  volatile CompletionQueueEntry *SubmitCmdNamespaceAttachment(
+      const Memory *prp1, int sel, uint16_t nsid);
 
  private:
   static const int kACQSize = 8;
@@ -24,6 +27,7 @@ class DevNvmeAdminQueue {
   static const int kCmdCreateIoSubmissionQueue = 0x01;
   static const int kCmdCreateIoCompletionQueue = 0x05;
   static const int kCmdIdentify = 0x06;
+  static const int kCmdNamespaceAttachment = 0x15;
 
   DevNvme *_nvme;
   DevNvmeQueue *_queue;
