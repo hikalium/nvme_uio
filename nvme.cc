@@ -194,6 +194,7 @@ void DevNvme::AttachAllNamespaces() {
   }
 
   _ioQueue->SubmitCmdFlush(1);
+  _ioQueue->Read(1, 0, 1);
 
   while (fgets(s, sizeof(s), stdin)) {
     s[strlen(s) - 1] = 0;  // removes new line
