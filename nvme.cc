@@ -159,7 +159,9 @@ void *DevNvme::IrqHandler(void *arg) {
     nvme->_pci.WaitInterrupt();
     // admin queue
     nvme->_adminQueue->InterruptHandler();
-    nvme->_ioQueue->InterruptHandler();
+    if (nvme->_ioQueue) {
+      nvme->_ioQueue->InterruptHandler();
+    }
   }
 }
 

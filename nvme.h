@@ -67,7 +67,7 @@ class DevNvme {
   pthread_t _irq_handler_thread;
   DevPci _pci;
   DevNvmeAdminQueue *_adminQueue;
-  DevNvmeIoQueue *_ioQueue;
+  DevNvmeIoQueue *_ioQueue = nullptr;
 
   static const int kCC_AMS_RoundRobin = 0b000;
   static const int kCC_CSS_NVMeCommandSet = 0b000;
