@@ -29,24 +29,29 @@ void DevNvmeIoQueue::Init(DevNvme *nvme, DevNvmeAdminQueue *aq, uint16_t qid,
 }
 
 void DevNvmeIoQueue::InterruptHandler() { _queue->InterruptHandler(); }
-/*
-volatile CompletionQueueEntry *DevNvmeAdminQueue::SubmitCmdIdentify(
-    const Memory *prp1, uint32_t nsid, uint16_t cntid, uint8_t cns) {
+
+volatile CompletionQueueEntry *DevNvmeIoQueue::SubmitCmdFlush(uint32_t nsid) {
   _queue->Lock();
   int32_t slot = _queue->GetNextSubmissionSlot();
   //
   volatile CommandSet *cmd = _queue->GetCommandSet(slot);
-  ConstructAdminCommand(slot, AdminCommandSet::kIdentify);
-  cmd->PRP1 = prp1->GetPhysPtr();
+  bzero((void *)cmd, sizeof(CommandSet));
+  cmd->CDW0.OPC = kCmdFlush;
+  cmd->CDW0.CID = slot;
+  //
   cmd->NSID = nsid;
-  cmd->CDW10 = cntid << 16 | cns;
   //
   _queue->SubmitCommand();
   volatile CompletionQueueEntry *cqe = _queue->WaitUntilCompletion(slot);
   _queue->Unlock();
+  if (cqe->SF.SCT != 0 || cqe->SF.SC != 0) {
+    printf("Flush: Command failed. SCT=%d, SC=%d\n\n", cqe->SF.SCT, cqe->SF.SC);
+  } else {
+    puts("Flush:OK");
+  }
   return cqe;
 }
-
+/*
 
 uint16_t DevNvmeAdminQueue::ConstructAdminCommand(int slot,
                                                   AdminCommandSet op) {

@@ -159,6 +159,7 @@ void *DevNvme::IrqHandler(void *arg) {
     nvme->_pci.WaitInterrupt();
     // admin queue
     nvme->_adminQueue->InterruptHandler();
+    nvme->_ioQueue->InterruptHandler();
   }
 }
 
@@ -191,6 +192,8 @@ void DevNvme::AttachAllNamespaces() {
     }
     printf("%d namespaces found.\n", i);
   }
+
+  _ioQueue->SubmitCmdFlush(1);
 
   while (fgets(s, sizeof(s), stdin)) {
     s[strlen(s) - 1] = 0;  // removes new line
