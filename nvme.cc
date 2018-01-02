@@ -54,11 +54,10 @@ void DevNvme::Init() {
     ControllerStatus csts;
     csts.dword = _ctrl_reg_32_base[kCtrlReg32OffsetCSTS];
     if (csts.bits.CFS) {
-      puts("Controller is in fatal state. Please reboot this machine.");
-      exit(EXIT_FAILURE);
+      puts("**** Controller is in fatal state. ****");
     }
-    if (csts.bits.RDY) {
-      if (csts.bits.SHST == kCSTS_SHST_Normal) {
+    if (csts.bits.RDY || csts.bits.CFS) {
+      if (csts.bits.SHST == kCSTS_SHST_Normal || csts.bits.CFS) {
         // shutdown if needed
         puts("Performing shutdown...");
         ControllerConfiguration cc;
