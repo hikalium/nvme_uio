@@ -36,6 +36,14 @@ struct CompletionQueueEntry {
     unsigned M : 1;
     unsigned DNR : 1;
   } SF;
+  bool isError() volatile { return SF.SCT != 0 || SF.SC != 0; }
+  bool PrintIfError(const char *cmdname) volatile {
+    if (isError()) {
+      printf("%s: Command failed. SCT=%d, SC=%d\n\n", cmdname, SF.SCT, SF.SC);
+      return true;
+    }
+    return false;
+  }
 } __attribute__((packed));
 
 union ControllerCapabilities {

@@ -19,6 +19,22 @@ void DevNvmeAdminQueue::Init(DevNvme *nvme) {
   }
 }
 
+void DevNvmeAdminQueue::InterruptHandler() { _queue->InterruptHandler(); }
+
+volatile CompletionQueueEntry *DevNvmeAdminQueue::AttachNamespace(
+    uint16_t nsid, uint16_t qid) {
+  Memory prp(4096);
+  uint16_t *ctrl_list = prp.GetVirtPtr<uint16_t>();
+  ctrl_list[0] = 1;
+  ctrl_list[1] = qid;
+
+  volatile CompletionQueueEntry *cqe =
+      SubmitCmdNamespaceAttachment(&prp, 0, nsid);
+
+  cqe->PrintIfError("AttachNamespace");
+  return cqe;
+}
+
 volatile CompletionQueueEntry *DevNvmeAdminQueue::SubmitCmdIdentify(
     const Memory *prp1, uint32_t nsid, uint16_t cntid, uint8_t cns) {
   _queue->Lock();
@@ -86,22 +102,6 @@ DevNvmeAdminQueue::SubmitCmdCreateIoSubmissionQueue(const Memory *prp1,
   return cqe;
 }
 
-volatile CompletionQueueEntry *DevNvmeAdminQueue::AttachNamespace(
-    uint16_t nsid, uint16_t qid) {
-  Memory prp(4096);
-  uint16_t *ctrl_list = prp.GetVirtPtr<uint16_t>();
-  ctrl_list[0] = 1;
-  ctrl_list[1] = qid;
-
-  volatile CompletionQueueEntry *cqe =
-      SubmitCmdNamespaceAttachment(&prp, 0, nsid);
-  if (cqe->SF.SCT != 0 || cqe->SF.SC != 0) {
-    printf("%d %d\n", cqe->SF.SCT, cqe->SF.SC);
-  } else {
-    puts("OK");
-  }
-  return cqe;
-}
 volatile CompletionQueueEntry *DevNvmeAdminQueue::SubmitCmdNamespaceAttachment(
     const Memory *prp1, int sel, uint16_t nsid) {
   _queue->Lock();
@@ -122,5 +122,3 @@ volatile CompletionQueueEntry *DevNvmeAdminQueue::SubmitCmdNamespaceAttachment(
   _queue->Unlock();
   return cqe;
 }
-
-void DevNvmeAdminQueue::InterruptHandler() { _queue->InterruptHandler(); }

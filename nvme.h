@@ -20,6 +20,9 @@ class DevNvmeAdminQueue;
 #include "ioqueue.h"
 class DevNvmeIoQueue;
 
+#include "namespace.h"
+class DevNvmeNamespace;
+
 class DevNvme {
  public:
   void Init();
@@ -56,8 +59,8 @@ class DevNvme {
   void ClearInterruptMaskForQueue(int y) {
     _ctrl_reg_32_base[kCtrlReg32OffsetINTMC] = 1 << y;
   }
-  void PrintControllerConfiguration(ControllerConfiguration);
-  void PrintControllerStatus(ControllerStatus);
+  void PrintControllerConfiguration();
+  void PrintControllerStatus();
   void PrintControllerCapabilities(ControllerCapabilities);
   void PrintCompletionQueueEntry(volatile CompletionQueueEntry *);
   void PrintAdminQueuesSettings();
@@ -68,6 +71,7 @@ class DevNvme {
   DevPci _pci;
   DevNvmeAdminQueue *_adminQueue;
   DevNvmeIoQueue *_ioQueue = nullptr;
+  DevNvmeNamespace *_namespaces[1024];
 
   static const int kCC_AMS_RoundRobin = 0b000;
   static const int kCC_CSS_NVMeCommandSet = 0b000;

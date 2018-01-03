@@ -11,12 +11,7 @@ void DevNvme::Init() {
 
   _pci.Init();
   assert(_pci.HasClassCodes(0x01, 0x08, 0x02));
-  {
-    uint16_t vid, did;
-    _pci.ReadPciReg(DevPci::kVendorIDReg, vid);
-    _pci.ReadPciReg(DevPci::kDeviceIDReg, did);
-    printf("vid:%08X did:%08X\n", vid, did);
-  }
+
   {
     // Enable Bus Master for transfering data from controller to host.
     uint8_t interface, sub, base;
@@ -39,17 +34,8 @@ void DevNvme::Init() {
     _ctrl_timeout_worst = cap.bits.TO * 500 * 1000;  // in unit 500ms -> us
     _doorbell_stride = cap.bits.DSTRD;
   }
-  {
-    ControllerConfiguration cc;
-    cc.dword = _ctrl_reg_32_base[kCtrlReg32OffsetCC];
-    PrintControllerConfiguration(cc);
-  }
-  {
-    ControllerStatus csts;
-    csts.dword = _ctrl_reg_32_base[kCtrlReg32OffsetCSTS];
-    PrintControllerStatus(csts);
-  }
-
+  PrintControllerConfiguration();
+  PrintControllerStatus();
   {
     ControllerStatus csts;
     csts.dword = _ctrl_reg_32_base[kCtrlReg32OffsetCSTS];
@@ -165,18 +151,16 @@ void *DevNvme::IrqHandler(void *arg) {
 }
 
 void DevNvme::AttachAllNamespaces() {
-  puts("Attach all name");
   char s[128];
-  unsigned int nsid;
   {
     Memory prp1(4096);
     _adminQueue->SubmitCmdIdentify(&prp1, 0xffffffff, 0, 0x01);
     IdentifyControllerData *idata = prp1.GetVirtPtr<IdentifyControllerData>();
-    printf("VID: %4X\n", idata->VID);
+    printf("  VID: %4X\n", idata->VID);
     printf("SSVID: %4X\n", idata->SSVID);
-    printf("SN: %.20s\n", idata->SN);
-    printf("MN: %.40s\n", idata->MN);
-    printf("FR: %.8s\n", idata->FR);
+    printf("   SN: %.20s\n", idata->SN);
+    printf("   MN: %.40s\n", idata->MN);
+    printf("   FR: %.8s\n", idata->FR);
   }
   _ioQueue = new DevNvmeIoQueue();
   _ioQueue->Init(this, _adminQueue, 1, 8, 8);
@@ -188,35 +172,41 @@ void DevNvme::AttachAllNamespaces() {
     int i;
     for (i = 0; i < 1024; i++) {
       if (id_list[i] == 0) break;
-      printf("%08X\n", id_list[i]);
+      _namespaces[i] = new DevNvmeNamespace();
+      _namespaces[i]->Init(this, _adminQueue, id_list[i]);
       _adminQueue->AttachNamespace(id_list[i], 1);
     }
     printf("%d namespaces found.\n", i);
   }
-
-  _ioQueue->SubmitCmdFlush(1);
-  _ioQueue->Read(1, 0, 1);
-
+  uint32_t nsidx;
+  uint64_t lba;
   while (fgets(s, sizeof(s), stdin)) {
     s[strlen(s) - 1] = 0;  // removes new line
 
-    if (strcmp(s, "list") == 0) {
-    } else if (sscanf(s, "nsinfo %x", &nsid) == 1) {
-      printf("Get info of NSID: %08X\n", nsid);
-      Memory prp1(4096);
-      _adminQueue->SubmitCmdIdentify(&prp1, nsid, 0, 0x00);
-      IdentifyNamespaceData *nsdata = prp1.GetVirtPtr<IdentifyNamespaceData>();
+    if (strcmp(s, "help") == 0) {
+      puts("> list");
+      puts("> readblock <Namespace index> <LBA>");
+      puts("> writeblock <Namespace index> <LBA>");
+    } else if (strcmp(s, "list") == 0) {
+      for (int i = 0; i < 1024; i++) {
+        if (!_namespaces[i]) break;
+        _namespaces[i]->PrintInfo();
+      }
+    } else if (sscanf(s, "readblock %x %lx", &nsidx, &lba) == 2) {
+      assert(nsidx < 1024);
+      if (_namespaces[nsidx]) {
+        uint8_t *buf =
+            static_cast<uint8_t *>(malloc(_namespaces[0]->GetBlockSize()));
+        if (!_ioQueue->ReadBlock(buf, _namespaces[0], lba)->isError()) {
+          for (uint64_t i = 0; i < _namespaces[0]->GetBlockSize(); i++) {
+            printf("%02X%c", buf[i], i % 16 == 15 ? '\n' : ' ');
+          }
+        }
+        free(buf);
+      } else {
+        puts("namespace index out of bound (check result of list cmd");
+      }
 
-      int LBAFindex = nsdata->FLBAS & 0xF;
-      printf("Current LBAFormat: %d\n", LBAFindex);
-      int LBASize = 1 << nsdata->LBAF[LBAFindex].LBADS;
-      printf("       block size: %d bytes\n", LBASize);
-      printf("NSZE: %ld blocks (%ld bytes)\n", nsdata->NSZE,
-             nsdata->NSZE * LBASize);
-      printf("NCAP: %ld blocks (%ld bytes)\n", nsdata->NCAP,
-             nsdata->NCAP * LBASize);
-      printf("NUSE: %ld blocks (%ld bytes)\n", nsdata->NUSE,
-             nsdata->NUSE * LBASize);
     } else {
       printf("Unknown comand: %s\n", s);
     }
@@ -246,13 +236,17 @@ void DevNvme::MapControlRegisters() {
   _ctrl_reg_64_base = reinterpret_cast<volatile uint64_t *>(_ctrl_reg_8_base);
 }
 
-void DevNvme::PrintControllerConfiguration(ControllerConfiguration cc) {
+void DevNvme::PrintControllerConfiguration() {
+  ControllerConfiguration cc;
+  cc.dword = _ctrl_reg_32_base[kCtrlReg32OffsetCC];
   printf("CC: EN=%d CSS=%d MPS=%d AMS=%d SHN=%d IOSQES=%d IOCQES=%d  \n",
          cc.bits.EN, cc.bits.CSS, cc.bits.MPS, cc.bits.AMS, cc.bits.SHN,
          cc.bits.IOSQES, cc.bits.IOCQES);
 }
 
-void DevNvme::PrintControllerStatus(ControllerStatus csts) {
+void DevNvme::PrintControllerStatus() {
+  ControllerStatus csts;
+  csts.dword = _ctrl_reg_32_base[kCtrlReg32OffsetCSTS];
   printf("CSTS: RDY=%d CFS=%d SHST=%d NSSRO=%d PP=%d  \n", csts.bits.RDY,
          csts.bits.CFS, csts.bits.SHST, csts.bits.NSSRO, csts.bits.PP);
 }

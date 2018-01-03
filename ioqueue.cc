@@ -11,24 +11,38 @@ void DevNvmeIoQueue::Init(DevNvme *nvme, DevNvmeAdminQueue *aq, uint16_t qid,
 
   cqe = aq->SubmitCmdCreateIoCompletionQueue(_queue->GetCompletionQueueMemory(),
                                              cq_size, qid);
-  if (cqe->SF.SCT != 0 || cqe->SF.SC != 0) {
-    printf("Command failed. SCT=%d, SC=%d\n\n", cqe->SF.SCT, cqe->SF.SC);
+  if (cqe->PrintIfError("CreateIoCompletionQueue")) {
     exit(EXIT_FAILURE);
-  } else {
-    puts("OK");
   }
   cqe = aq->SubmitCmdCreateIoSubmissionQueue(_queue->GetSubmissionQueueMemory(),
                                              sq_size, qid, qid);
-  if (cqe->SF.SCT != 0 || cqe->SF.SC != 0) {
-    printf("Command failed. SCT=%d, SC=%d\n\n", cqe->SF.SCT, cqe->SF.SC);
+  if (cqe->PrintIfError("CreateIoSubmissionQueue")) {
     exit(EXIT_FAILURE);
-  } else {
-    puts("OK");
   }
+
   printf("IO Queue %d created\n", qid);
 }
 
 void DevNvmeIoQueue::InterruptHandler() { _queue->InterruptHandler(); }
+
+int DevNvmeIoQueue::Flush(DevNvmeNamespace *ns) {
+  SubmitCmdFlush(ns->GetId());
+  return 0;
+}
+
+volatile CompletionQueueEntry *DevNvmeIoQueue::ReadBlock(void *dst,
+                                                         DevNvmeNamespace *ns,
+                                                         uint64_t lba) {
+  assert(ns->GetBlockSize() <= 4096);
+  Memory prp(4096);
+  volatile CompletionQueueEntry *cqe;
+  cqe = SubmitCmdRead(&prp, ns->GetId(), lba, 1, false, false, 0);
+  uint8_t *buf = prp.GetVirtPtr<uint8_t>();
+  if (!cqe->isError()) {
+    memcpy(dst, buf, ns->GetBlockSize());
+  }
+  return cqe;
+}
 
 volatile CompletionQueueEntry *DevNvmeIoQueue::SubmitCmdFlush(uint32_t nsid) {
   _queue->Lock();
@@ -44,23 +58,8 @@ volatile CompletionQueueEntry *DevNvmeIoQueue::SubmitCmdFlush(uint32_t nsid) {
   _queue->SubmitCommand();
   volatile CompletionQueueEntry *cqe = _queue->WaitUntilCompletion(slot);
   _queue->Unlock();
-  if (cqe->SF.SCT != 0 || cqe->SF.SC != 0) {
-    printf("Flush: Command failed. SCT=%d, SC=%d\n\n", cqe->SF.SCT, cqe->SF.SC);
-  } else {
-    puts("Flush:OK");
-  }
-  return cqe;
-}
 
-volatile CompletionQueueEntry *DevNvmeIoQueue::Read(uint32_t nsid, uint64_t lba,
-                                                    uint16_t number_of_blocks) {
-  Memory prplist(4096), prp(4096);
-  volatile CompletionQueueEntry *cqe;
-  cqe = SubmitCmdRead(&prp, nsid, lba, number_of_blocks, false, false, 0);
-  uint8_t *buf = prp.GetVirtPtr<uint8_t>();
-  for (int i = 0; i < 64; i++) {
-    printf("%02X%c", buf[i], i % 16 == 15 ? '\n' : ' ');
-  }
+  cqe->PrintIfError("SubmitCmdFlush");
   return cqe;
 }
 
@@ -87,33 +86,7 @@ volatile CompletionQueueEntry *DevNvmeIoQueue::SubmitCmdRead(
   _queue->SubmitCommand();
   volatile CompletionQueueEntry *cqe = _queue->WaitUntilCompletion(slot);
   _queue->Unlock();
-  if (cqe->SF.SCT != 0 || cqe->SF.SC != 0) {
-    printf("Read: Command failed. SCT=%d, SC=%d\n\n", cqe->SF.SCT, cqe->SF.SC);
-  } else {
-    puts("Read:OK");
-  }
+
+  cqe->PrintIfError("SubmitCmdRead");
   return cqe;
 }
-/*
-
-uint16_t DevNvmeAdminQueue::ConstructAdminCommand(int slot,
-                                                  AdminCommandSet op) {
-  // returns CID
-  // Set CDW0 for op.
-  volatile CommandSet *cmd = _queue->GetCommandSet(slot);
-  cmd->CDW0.OPC = static_cast<int>(op);
-  cmd->CDW0.CID = slot;
-  switch (op) {
-    case AdminCommandSet::kIdentify:
-      cmd->CDW0.FUSE = kFUSE_Normal;
-      cmd->CDW0.PSDT = kPSDT_UsePRP;
-      break;
-    case AdminCommandSet::kAbort:
-      break;
-    default:
-      printf("Tried to construct unknown command %d\n", static_cast<int>(op));
-      exit(EXIT_FAILURE);
-  }
-  return slot;
-}
-*/

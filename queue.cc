@@ -49,16 +49,18 @@ void DevNvmeQueue::Init(DevNvme *nvme, int id, int sq_size, int cq_size) {
 void DevNvmeQueue::InterruptHandler() {
   _nvme->SetInterruptMaskForQueue(_id);
   Lock();
-  while (_cq[_next_completion_slot].SF.P == _expected_completion_phase) {
-    // TODO: FIX _pt_cond_list index
-    int completed_command_id = _cq[_next_completion_slot].SF.CID;
-    pthread_cond_signal(&_pt_cond_list[completed_command_id]);
-    //
-    _next_completion_slot = (_next_completion_slot + 1) % _cq_size;
-    if (_next_completion_slot == 0)
-      _expected_completion_phase = 1 - _expected_completion_phase;
+  if (_cq[_next_completion_slot].SF.P == _expected_completion_phase) {
+    while (_cq[_next_completion_slot].SF.P == _expected_completion_phase) {
+      // TODO: FIX _pt_cond_list index
+      int completed_command_id = _cq[_next_completion_slot].SF.CID;
+      pthread_cond_signal(&_pt_cond_list[completed_command_id]);
+      //
+      _next_completion_slot = (_next_completion_slot + 1) % _cq_size;
+      if (_next_completion_slot == 0)
+        _expected_completion_phase = 1 - _expected_completion_phase;
+    }
+    _nvme->SetCQyHDBL(_id, _next_completion_slot);
   }
-  _nvme->SetCQyHDBL(_id, _next_completion_slot);
   Unlock();
   _nvme->ClearInterruptMaskForQueue(_id);
 }

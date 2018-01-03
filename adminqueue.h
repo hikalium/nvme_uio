@@ -9,6 +9,9 @@ class DevNvmeAdminQueue {
  public:
   void Init(DevNvme *nvme);
   void InterruptHandler();
+
+  volatile CompletionQueueEntry *AttachNamespace(uint16_t nsid, uint16_t qid);
+
   volatile CompletionQueueEntry *SubmitCmdIdentify(const Memory *prp1,
                                                    uint32_t nsid,
                                                    uint16_t cntid, uint8_t cns);
@@ -16,7 +19,6 @@ class DevNvmeAdminQueue {
       const Memory *prp1, uint16_t size, uint16_t qid, uint16_t cqid);
   volatile CompletionQueueEntry *SubmitCmdCreateIoCompletionQueue(
       const Memory *prp1, uint16_t size, uint16_t qid);
-  volatile CompletionQueueEntry *AttachNamespace(uint16_t nsid, uint16_t qid);
   volatile CompletionQueueEntry *SubmitCmdNamespaceAttachment(
       const Memory *prp1, int sel, uint16_t nsid);
 
