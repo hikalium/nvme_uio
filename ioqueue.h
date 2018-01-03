@@ -16,9 +16,14 @@ class DevNvmeIoQueue {
   int Flush(DevNvmeNamespace *ns);
   volatile CompletionQueueEntry *ReadBlock(void *dst, DevNvmeNamespace *ns,
                                            uint64_t lba);
+  volatile CompletionQueueEntry *WriteBlock(void *src, DevNvmeNamespace *ns,
+                                            uint64_t lba);
 
   volatile CompletionQueueEntry *SubmitCmdFlush(uint32_t nsid);
   volatile CompletionQueueEntry *SubmitCmdRead(
+      Memory *prp1, uint32_t nsid, uint64_t lba, uint16_t number_of_blocks,
+      bool do_limited_retry, bool force_unit_access, uint8_t protection_info);
+  volatile CompletionQueueEntry *SubmitCmdWrite(
       Memory *prp1, uint32_t nsid, uint64_t lba, uint16_t number_of_blocks,
       bool do_limited_retry, bool force_unit_access, uint8_t protection_info);
 

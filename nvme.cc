@@ -180,6 +180,7 @@ void DevNvme::AttachAllNamespaces() {
   }
   uint32_t nsidx;
   uint64_t lba;
+  uint8_t *buf = static_cast<uint8_t *>(malloc(_namespaces[0]->GetBlockSize()));
   while (fgets(s, sizeof(s), stdin)) {
     s[strlen(s) - 1] = 0;  // removes new line
 
@@ -190,23 +191,29 @@ void DevNvme::AttachAllNamespaces() {
     } else if (strcmp(s, "list") == 0) {
       for (int i = 0; i < 1024; i++) {
         if (!_namespaces[i]) break;
+        printf("_namespaces[%d]:\n", i);
         _namespaces[i]->PrintInfo();
       }
     } else if (sscanf(s, "readblock %x %lx", &nsidx, &lba) == 2) {
       assert(nsidx < 1024);
       if (_namespaces[nsidx]) {
-        uint8_t *buf =
-            static_cast<uint8_t *>(malloc(_namespaces[0]->GetBlockSize()));
         if (!_ioQueue->ReadBlock(buf, _namespaces[0], lba)->isError()) {
           for (uint64_t i = 0; i < _namespaces[0]->GetBlockSize(); i++) {
             printf("%02X%c", buf[i], i % 16 == 15 ? '\n' : ' ');
           }
         }
-        free(buf);
       } else {
         puts("namespace index out of bound (check result of list cmd");
       }
-
+    } else if (sscanf(s, "writeblock %x %lx %s", &nsidx, &lba, buf) == 3) {
+      assert(nsidx < 1024);
+      if (_namespaces[nsidx]) {
+        if (!_ioQueue->WriteBlock(buf, _namespaces[0], lba)->isError()) {
+          puts("OK");
+        }
+      } else {
+        puts("namespace index out of bound (check result of list cmd");
+      }
     } else {
       printf("Unknown comand: %s\n", s);
     }
