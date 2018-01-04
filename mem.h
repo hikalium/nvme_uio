@@ -15,12 +15,13 @@ class Memory {
  public:
   Memory() = delete;
   Memory(size_t size) {
-    _size = size;
+    _req_size = size;
 
-    if (_size > 0) {
-      assert(_size <= 2 * 1024 * 1024);
+    if (_req_size > 0) {
+      assert(_req_size <= 2 * 1024 * 1024);
+      _act_size = 2 * 1024 * 1024;
       _virt =
-          mmap(NULL, 2 * 1024 * 1024, PROT_READ | PROT_WRITE,
+          mmap(NULL, _act_size, PROT_READ | PROT_WRITE,
                MAP_PRIVATE | MAP_HUGETLB | MAP_ANONYMOUS | MAP_POPULATE, 0, 0);
       if (_virt == MAP_FAILED) {
         perror("page alloc:");
@@ -33,8 +34,8 @@ class Memory {
     }
   }
   ~Memory() {
-    if (_size > 0) {
-      munmap(_virt, _size);
+    if (_act_size > 0) {
+      munmap(_virt, 2 * 1024 * 1024);
     }
   }
   template <class T>
@@ -42,7 +43,7 @@ class Memory {
     return reinterpret_cast<T *>(_virt);
   }
   phys_addr GetPhysPtr() const { return _phys; }
-  size_t GetSize() { return _size; }
+  size_t GetSize() { return _req_size; }
 
  private:
   static size_t vtop(size_t vaddr) {
@@ -71,5 +72,6 @@ class Memory {
 
   void *_virt;
   phys_addr _phys;
-  size_t _size;
+  size_t _req_size = 0;
+  size_t _act_size = 0;
 };

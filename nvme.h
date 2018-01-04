@@ -66,12 +66,13 @@ class DevNvme {
   void PrintAdminQueuesSettings();
   void PrintInterruptMask();
 
+  DevNvmeNamespace *_namespaces[1024];
+  DevNvmeIoQueue *_ioQueue = nullptr;
+
  private:
   pthread_t _irq_handler_thread;
   DevPci _pci;
   DevNvmeAdminQueue *_adminQueue;
-  DevNvmeIoQueue *_ioQueue = nullptr;
-  DevNvmeNamespace *_namespaces[1024];
 
   static const int kCC_AMS_RoundRobin = 0b000;
   static const int kCC_CSS_NVMeCommandSet = 0b000;

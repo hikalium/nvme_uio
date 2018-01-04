@@ -15,6 +15,8 @@ TARGET_PCI_VID=$(shell echo $(TARGET_PCI_VID_DID) | cut -f 1 -d ':')
 TARGET_PCI_DID=$(shell echo $(TARGET_PCI_VID_DID) | cut -f 2 -d ':')
 TARGET_KERNEL_DRIVER=$(shell lspci -k -s $(TARGET_PCI_BUS_ID) | grep "Kernel driver in use:" | cut -f 2 -d ":" | tr -d " ")
 
+ARGS=help
+
 check:
 	@lspci -vv -n -k -s $(TARGET_PCI_BUS_ID)
 	@echo "   bus: $(TARGET_PCI_BUS_ID)"
@@ -42,7 +44,7 @@ install_uio_module:
 
 run: a.out
 	sudo sh -c "echo 120 > /proc/sys/vm/nr_hugepages"
-	sudo ./a.out
+	sudo ./a.out $(ARGS)
 
 gdb: a.out
 	sudo sh -c "echo 120 > /proc/sys/vm/nr_hugepages"
