@@ -1,7 +1,7 @@
 OBJS= main.o nvme.o queue.o adminqueue.o ioqueue.o namespace.o
 DEPS= $(filter %.d, $(subst .o,.d, $(OBJS)))
 
-CXXFLAGS += -g -std=c++14 -MMD -MP -Wall -Wpedantic -pthread
+CXXFLAGS += -g -std=c++14 -MMD -MP -Wall -Wpedantic -pthread -I./pcie_uio
 
 .PHONY: load_uio run
 
