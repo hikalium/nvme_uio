@@ -1,3 +1,5 @@
+#include <sys/resource.h>
+#include <sys/time.h>
 #include "nvme.h"
 
 int main(int argc, const char **argv) {
@@ -44,6 +46,16 @@ int main(int argc, const char **argv) {
       puts("namespace index out of bound (check result of list cmd");
     }
   } else if (argc == 5 && strcmp(argv[1], "dd") == 0) {
+    struct rusage usage;
+    struct timeval ut1, ut2;
+    struct timeval st1, st2;
+    struct timeval rt1, rt2;
+
+    getrusage(RUSAGE_SELF, &usage);
+    ut1 = usage.ru_utime;
+    st1 = usage.ru_stime;
+    gettimeofday(&rt1, NULL);
+    //
     nsidx = atoi(argv[2]);
     lba = atoi(argv[3]);
     FILE *fp = fopen(argv[4], "rb");
@@ -63,6 +75,18 @@ int main(int argc, const char **argv) {
     }
     puts("\ndone.\n");
     fclose(fp);
+    //
+    getrusage(RUSAGE_SELF, &usage);
+    ut2 = usage.ru_utime;
+    st2 = usage.ru_stime;
+    gettimeofday(&rt2, NULL);
+    //
+    timersub(&ut2, &ut1, &ut1);
+    timersub(&st2, &st1, &st1);
+    timersub(&rt2, &rt1, &rt1);
+    printf("real \t%lf\n", rt1.tv_sec + rt1.tv_usec * 1.0E-6);
+    printf("user \t%lf\n", ut1.tv_sec + ut1.tv_usec * 1.0E-6);
+    printf("sys  \t%lf\n", st1.tv_sec + st1.tv_usec * 1.0E-6);
   } else {
     printf("Unknown comand: %s\n", argv[0]);
   }
