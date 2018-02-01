@@ -66,7 +66,6 @@ int main(int argc, const char **argv) {
     while (fread(buf, 1, nvme->_namespaces[0]->GetBlockSize(), fp)) {
       if (!nvme->_ioQueue->WriteBlock(buf, nvme->_namespaces[0], lba)
                ->isError()) {
-        putchar('#');
       } else {
         puts("Failed");
         break;
