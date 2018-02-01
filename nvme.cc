@@ -141,7 +141,8 @@ void *DevNvme::IrqHandler(void *arg) {
   DevNvme *nvme = reinterpret_cast<DevNvme *>(arg);
 
   while (true) {
-    nvme->_pci.WaitInterrupt();
+    // nvme->_pci.WaitInterrupt();
+    nvme->_pci.WaitInterruptPolling();
     // admin queue
     nvme->_adminQueue->InterruptHandler();
     if (nvme->_ioQueue) {
