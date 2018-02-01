@@ -44,14 +44,14 @@ volatile CompletionQueueEntry *DevNvmeIoQueue::ReadBlock(void *dst,
   return cqe;
 }
 
+Memory _prp(4096);
 volatile CompletionQueueEntry *DevNvmeIoQueue::WriteBlock(void *src,
                                                           DevNvmeNamespace *ns,
                                                           uint64_t lba) {
   assert(ns->GetBlockSize() <= 4096);
-  Memory prp(4096);
-  uint8_t *buf = prp.GetVirtPtr<uint8_t>();
+  uint8_t *buf = _prp.GetVirtPtr<uint8_t>();
   memcpy(buf, src, ns->GetBlockSize());
-  return SubmitCmdWrite(&prp, ns->GetId(), lba, 1, false, false, 0);
+  return SubmitCmdWrite(&_prp, ns->GetId(), lba, 1, false, false, 0);
 }
 
 volatile CompletionQueueEntry *DevNvmeIoQueue::SubmitCmdFlush(uint32_t nsid) {
