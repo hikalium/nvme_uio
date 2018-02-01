@@ -3,3 +3,4 @@ a.out
 *.o
 tags
 *.swp
+*.bin
